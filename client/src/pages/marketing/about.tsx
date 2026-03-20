@@ -2,7 +2,6 @@ import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ArrowLeft, ArrowRight, Target, Heart, Zap } from "lucide-react";
-import { PerplexityAttribution } from "@/components/PerplexityAttribution";
 
 const values = [
   { icon: Target, title: "Speed", desc: "We believe document workflows should take minutes, not days. Every feature we build is designed to save time." },
@@ -108,7 +107,6 @@ export default function AboutPage() {
       <footer className="border-t py-8">
         <div className="max-w-7xl mx-auto px-6 flex items-center justify-between">
           <p className="text-xs text-muted-foreground">2026 DraftSendSign. All rights reserved.</p>
-          <PerplexityAttribution />
         </div>
       </footer>
     </div>

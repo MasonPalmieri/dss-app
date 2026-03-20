@@ -68,16 +68,27 @@ export default function SigningPage() {
     },
   });
 
-  // Canvas drawing
+  // Helpers to get position from mouse or touch event
+  const getPos = (canvas: HTMLCanvasElement, clientX: number, clientY: number) => {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    return {
+      x: (clientX - rect.left) * scaleX,
+      y: (clientY - rect.top) * scaleY,
+    };
+  };
+
+  // Canvas drawing — mouse
   const startDrawing = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     setIsDrawing(true);
-    const rect = canvas.getBoundingClientRect();
+    const { x, y } = getPos(canvas, e.clientX, e.clientY);
     ctx.beginPath();
-    ctx.moveTo(e.clientX - rect.left, e.clientY - rect.top);
+    ctx.moveTo(x, y);
   };
 
   const draw = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -86,11 +97,12 @@ export default function SigningPage() {
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    const rect = canvas.getBoundingClientRect();
-    ctx.lineWidth = 2;
+    const { x, y } = getPos(canvas, e.clientX, e.clientY);
+    ctx.lineWidth = 2.5;
     ctx.lineCap = "round";
-    ctx.strokeStyle = "#000";
-    ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top);
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = "#1a1a1a";
+    ctx.lineTo(x, y);
     ctx.stroke();
   };
 
@@ -100,6 +112,42 @@ export default function SigningPage() {
     if (canvas) {
       setSignatureData(canvas.toDataURL());
     }
+  };
+
+  // Canvas drawing — touch
+  const startTouchDrawing = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    setIsDrawing(true);
+    const touch = e.touches[0];
+    const { x, y } = getPos(canvas, touch.clientX, touch.clientY);
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+  };
+
+  const touchDraw = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
+    if (!isDrawing) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const touch = e.touches[0];
+    const { x, y } = getPos(canvas, touch.clientX, touch.clientY);
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = "#1a1a1a";
+    ctx.lineTo(x, y);
+    ctx.stroke();
+  };
+
+  const stopTouchDrawing = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
+    stopDrawing();
   };
 
   const clearCanvas = () => {
@@ -395,11 +443,15 @@ export default function SigningPage() {
                   ref={canvasRef}
                   width={360}
                   height={150}
-                  className="w-full cursor-crosshair bg-white dark:bg-gray-900 rounded"
+                  className="w-full cursor-crosshair bg-white dark:bg-gray-900 rounded touch-none"
+                  style={{ touchAction: "none" }}
                   onMouseDown={startDrawing}
                   onMouseMove={draw}
                   onMouseUp={stopDrawing}
                   onMouseLeave={stopDrawing}
+                  onTouchStart={startTouchDrawing}
+                  onTouchMove={touchDraw}
+                  onTouchEnd={stopTouchDrawing}
                   data-testid="signature-canvas"
                 />
                 <Button

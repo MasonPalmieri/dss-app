@@ -13,7 +13,6 @@ import {
   Globe,
   ArrowRight,
 } from "lucide-react";
-import { PerplexityAttribution } from "@/components/PerplexityAttribution";
 
 const securityFeatures = [
   { icon: Lock, title: "256-bit AES Encryption", desc: "All documents are encrypted with AES-256 at rest and TLS 1.3 in transit. Your data is protected with the same standards used by banks and government agencies." },
@@ -86,7 +85,6 @@ export default function SecurityPage() {
       <footer className="border-t py-8">
         <div className="max-w-7xl mx-auto px-6 flex items-center justify-between">
           <p className="text-xs text-muted-foreground">2026 DraftSendSign. All rights reserved.</p>
-          <PerplexityAttribution />
         </div>
       </footer>
     </div>

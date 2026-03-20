@@ -20,7 +20,6 @@ import {
   Home,
   Briefcase,
 } from "lucide-react";
-import { PerplexityAttribution } from "@/components/PerplexityAttribution";
 
 const steps = [
   { icon: Upload, title: "Upload", desc: "Drag & drop your PDF documents" },
@@ -357,7 +356,6 @@ export default function MarketingHome() {
           </div>
           <div className="border-t mt-8 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
             <p className="text-xs text-muted-foreground">2026 DraftSendSign. All rights reserved.</p>
-            <PerplexityAttribution />
           </div>
         </div>
       </footer>

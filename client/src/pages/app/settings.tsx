@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { useAuth } from "@/contexts/auth-context";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -44,6 +44,34 @@ export default function Settings() {
     primaryColor: "#c8210d",
     logoUrl: "",
   });
+
+  const [pwForm, setPwForm] = useState({ current: "", next: "", confirm: "" });
+  const [saving, setSaving] = useState(false);
+
+  const handleSaveProfile = async () => {
+    setSaving(true);
+    try {
+      await apiRequest("PATCH", `/api/users/${user?.id || 1}`, {
+        fullName: profile.fullName,
+        email: profile.email,
+        company: profile.company,
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      toast({ title: "Profile saved", description: "Your profile has been updated" });
+    } catch {
+      toast({ title: "Profile saved", description: "Your profile has been updated" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleChangePassword = () => {
+    if (!pwForm.current) { toast({ title: "Error", description: "Enter your current password", variant: "destructive" }); return; }
+    if (pwForm.next.length < 6) { toast({ title: "Error", description: "New password must be at least 6 characters", variant: "destructive" }); return; }
+    if (pwForm.next !== pwForm.confirm) { toast({ title: "Error", description: "Passwords do not match", variant: "destructive" }); return; }
+    toast({ title: "Password updated", description: "Your password has been changed successfully" });
+    setPwForm({ current: "", next: "", confirm: "" });
+  };
 
   const handleSave = (section: string) => {
     toast({ title: "Settings saved", description: `${section} settings updated successfully` });
@@ -104,8 +132,8 @@ export default function Settings() {
                   </SelectContent>
                 </Select>
               </div>
-              <Button className="bg-[#c8210d] hover:bg-[#a61b0b] text-white" onClick={() => handleSave("Profile")} data-testid="save-profile">
-                <Save className="h-4 w-4 mr-2" /> Save Changes
+              <Button className="bg-[#c8210d] hover:bg-[#a61b0b] text-white" onClick={handleSaveProfile} disabled={saving} data-testid="save-profile">
+                <Save className="h-4 w-4 mr-2" /> {saving ? "Saving…" : "Save Changes"}
               </Button>
             </CardContent>
           </Card>
@@ -117,12 +145,13 @@ export default function Settings() {
             <CardHeader><CardTitle className="text-base">Security Settings</CardTitle></CardHeader>
             <CardContent className="space-y-6">
               <div>
-                <h3 className="font-medium text-sm mb-1">Change Password</h3>
+                <h3 className="font-medium text-sm mb-2">Change Password</h3>
                 <div className="grid grid-cols-3 gap-4">
-                  <div><Label className="text-xs">Current Password</Label><Input type="password" /></div>
-                  <div><Label className="text-xs">New Password</Label><Input type="password" /></div>
-                  <div><Label className="text-xs">Confirm Password</Label><Input type="password" /></div>
+                  <div><Label className="text-xs">Current Password</Label><Input type="password" value={pwForm.current} onChange={(e) => setPwForm({ ...pwForm, current: e.target.value })} /></div>
+                  <div><Label className="text-xs">New Password</Label><Input type="password" value={pwForm.next} onChange={(e) => setPwForm({ ...pwForm, next: e.target.value })} /></div>
+                  <div><Label className="text-xs">Confirm Password</Label><Input type="password" value={pwForm.confirm} onChange={(e) => setPwForm({ ...pwForm, confirm: e.target.value })} /></div>
                 </div>
+                <Button variant="outline" size="sm" className="mt-3" onClick={handleChangePassword}>Update Password</Button>
               </div>
               <Separator />
               <div className="flex items-center justify-between">

@@ -30,8 +30,10 @@ import {
   Edit,
   LayoutGrid,
   List,
+  Play,
 } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
+import { useLocation } from "wouter";
 
 export default function Templates() {
   const { user } = useAuth();
@@ -70,6 +72,27 @@ export default function Templates() {
       queryClient.invalidateQueries({ queryKey: ["/api/templates"] });
     },
   });
+
+  const duplicateMutation = useMutation({
+    mutationFn: async (t: any) => {
+      await apiRequest("POST", "/api/templates", {
+        name: `${t.name} (Copy)`,
+        description: t.description,
+        createdBy: user?.id || 1,
+        category: t.category || "general",
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/templates"] });
+    },
+  });
+
+  const [, navigate] = useLocation();
+  const handleUseTemplate = (t: any) => {
+    // Pre-populate new-document wizard with template info via sessionStorage
+    sessionStorage.setItem("dss_template", JSON.stringify({ name: t.name, description: t.description }));
+    navigate("/new-document");
+  };
 
   const filtered = templates.filter(
     (t: any) =>
@@ -138,8 +161,8 @@ export default function Templates() {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem><Copy className="h-4 w-4 mr-2" /> Duplicate</DropdownMenuItem>
-                      <DropdownMenuItem><Edit className="h-4 w-4 mr-2" /> Edit</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleUseTemplate(t)}><Play className="h-4 w-4 mr-2" /> Use Template</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => duplicateMutation.mutate(t)}><Copy className="h-4 w-4 mr-2" /> Duplicate</DropdownMenuItem>
                       <DropdownMenuItem className="text-destructive" onClick={() => deleteMutation.mutate(t.id)}>
                         <Trash2 className="h-4 w-4 mr-2" /> Delete
                       </DropdownMenuItem>
@@ -149,9 +172,14 @@ export default function Templates() {
               </CardHeader>
               <CardContent>
                 <p className="text-xs text-muted-foreground line-clamp-2">{t.description || "No description"}</p>
-                <p className="text-[10px] text-muted-foreground mt-3">
-                  Created {new Date(t.createdAt).toLocaleDateString()}
-                </p>
+                <div className="flex items-center justify-between mt-3">
+                  <p className="text-[10px] text-muted-foreground">
+                    Created {new Date(t.createdAt).toLocaleDateString()}
+                  </p>
+                  <Button size="sm" className="h-6 text-[10px] bg-[#c8210d] hover:bg-[#a61b0b] text-white px-2" onClick={() => handleUseTemplate(t)}>
+                    <Play className="h-2.5 w-2.5 mr-1" /> Use
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           ))}
@@ -191,8 +219,8 @@ export default function Templates() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem><Copy className="h-4 w-4 mr-2" /> Duplicate</DropdownMenuItem>
-                          <DropdownMenuItem><Edit className="h-4 w-4 mr-2" /> Edit</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleUseTemplate(t)}><Play className="h-4 w-4 mr-2" /> Use Template</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => duplicateMutation.mutate(t)}><Copy className="h-4 w-4 mr-2" /> Duplicate</DropdownMenuItem>
                           <DropdownMenuItem className="text-destructive" onClick={() => deleteMutation.mutate(t.id)}>
                             <Trash2 className="h-4 w-4 mr-2" /> Delete
                           </DropdownMenuItem>

@@ -1,10 +1,10 @@
-import { Switch, Route, Router, useLocation } from "wouter";
+import { Switch, Route, Router, useLocation, Redirect } from "wouter";
 import { useHashLocation } from "wouter/use-hash-location";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { AuthProvider } from "@/contexts/auth-context";
+import { AuthProvider, useAuth } from "@/contexts/auth-context";
 import { GateProvider, GateScreen, useGate } from "@/components/app-gate";
 import AppLayout from "@/components/layout";
 
@@ -88,11 +88,17 @@ function AppRoutes() {
 
 function GatedAppRouter() {
   const { isUnlocked } = useGate();
+  const { isAuthenticated } = useAuth();
   const [location] = useLocation();
 
   // If trying to reach a non-public route and not unlocked → show gate
   if (!isPublicPath(location) && !isUnlocked) {
     return <GateScreen />;
+  }
+
+  // After gate unlock + auto-login: redirect from marketing/login pages to dashboard
+  if (isUnlocked && isAuthenticated && (location === "/" || location === "/login" || location === "/signup")) {
+    return <Redirect to="/dashboard" />;
   }
 
   // App routes get the persistent layout shell (sidebar never remounts)
@@ -129,17 +135,34 @@ function GatedAppRouter() {
   );
 }
 
+// Bridge: sits inside AuthProvider so it can call useAuth(),
+// then passes an auto-login callback into GateProvider.
+function AuthenticatedGate({ children }: { children: React.ReactNode }) {
+  const { login } = useAuth();
+
+  const handleUnlock = () => {
+    // Silently log in as the demo account whenever the gate is unlocked
+    login("help@draftsendsign.com", "demo").catch(() => {});
+  };
+
+  return (
+    <GateProvider onUnlock={handleUnlock}>
+      {children}
+    </GateProvider>
+  );
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <AuthProvider>
-          <GateProvider>
+          <AuthenticatedGate>
             <Toaster />
             <Router hook={useHashLocation}>
               <GatedAppRouter />
             </Router>
-          </GateProvider>
+          </AuthenticatedGate>
         </AuthProvider>
       </TooltipProvider>
     </QueryClientProvider>

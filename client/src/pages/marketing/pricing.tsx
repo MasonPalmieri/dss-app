@@ -4,7 +4,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Check, X, ArrowLeft } from "lucide-react";
 import { useState } from "react";
-import { PerplexityAttribution } from "@/components/PerplexityAttribution";
 
 const plans = [
   {
@@ -165,7 +164,6 @@ export default function PricingPage() {
       <footer className="border-t py-8">
         <div className="max-w-7xl mx-auto px-6 flex items-center justify-between">
           <p className="text-xs text-muted-foreground">2026 DraftSendSign. All rights reserved.</p>
-          <PerplexityAttribution />
         </div>
       </footer>
     </div>

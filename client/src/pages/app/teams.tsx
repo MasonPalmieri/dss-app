@@ -21,7 +21,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Plus, MoreHorizontal, Trash2, Users, Shield, UserPlus } from "lucide-react";
+import { Plus, MoreHorizontal, Trash2, Users, Shield, UserPlus, Building2, Crown, Lock } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
 
 export default function Teams() {
   const { user } = useAuth();
@@ -186,6 +187,88 @@ export default function Teams() {
               </tbody>
             </table>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Enterprise Sub-Accounts */}
+      <Card className="border-[#c8210d]/30">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Crown className="h-4 w-4 text-[#c8210d]" />
+              <CardTitle className="text-base">Enterprise Sub-Accounts</CardTitle>
+              <Badge className="bg-[#c8210d]/10 text-[#c8210d] border-[#c8210d]/20 text-[10px]">Enterprise</Badge>
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground mt-1">
+            As the master account holder, you can provision sub-accounts for your organization. Each sub-account has its own login, document workspace, and usage allocation.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-3 gap-3">
+            <div className="rounded-lg border bg-muted/30 p-3 text-center">
+              <p className="text-2xl font-bold">3</p>
+              <p className="text-xs text-muted-foreground">Sub-accounts used</p>
+            </div>
+            <div className="rounded-lg border bg-muted/30 p-3 text-center">
+              <p className="text-2xl font-bold">7</p>
+              <p className="text-xs text-muted-foreground">Remaining seats</p>
+            </div>
+            <div className="rounded-lg border bg-muted/30 p-3 text-center">
+              <p className="text-2xl font-bold">10</p>
+              <p className="text-xs text-muted-foreground">Total allocation</p>
+            </div>
+          </div>
+
+          <Separator />
+
+          <div className="space-y-2">
+            {[
+              { name: "Charlton Boyd", email: "charlton@ndaexpress.com", status: "active", docs: 12, lastActive: "Today" },
+              { name: "Josiah Namie",  email: "josiah@ndaexpress.ai",   status: "active", docs: 7,  lastActive: "Yesterday" },
+              { name: "Matthew Knych", email: "matt@ndaexpress.com",    status: "active", docs: 21, lastActive: "Today" },
+            ].map(account => (
+              <div key={account.email} className="flex items-center justify-between rounded-lg border p-3 hover:bg-muted/30 transition-colors">
+                <div className="flex items-center gap-3">
+                  <div className="h-8 w-8 rounded-full bg-[#c8210d]/10 flex items-center justify-center text-xs font-bold text-[#c8210d]">
+                    {account.name.charAt(0)}
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">{account.name}</p>
+                    <p className="text-xs text-muted-foreground">{account.email}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="text-right">
+                    <p className="text-xs font-medium">{account.docs} docs</p>
+                    <p className="text-[10px] text-muted-foreground">{account.lastActive}</p>
+                  </div>
+                  <Badge className="bg-green-500/10 text-green-600 border-green-200 text-[10px]">Active</Badge>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-7 w-7">
+                        <MoreHorizontal className="h-3.5 w-3.5" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem>View Activity</DropdownMenuItem>
+                      <DropdownMenuItem>Reset Password</DropdownMenuItem>
+                      <DropdownMenuItem className="text-destructive"><Lock className="h-3.5 w-3.5 mr-2" />Suspend Account</DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <Button variant="outline" className="w-full border-dashed">
+            <Plus className="h-4 w-4 mr-2" />
+            Provision New Sub-Account
+          </Button>
+
+          <p className="text-[11px] text-muted-foreground text-center">
+            Sub-accounts receive a discounted rate as part of your Enterprise plan. <span className="text-[#c8210d] cursor-pointer">Manage allocation →</span>
+          </p>
         </CardContent>
       </Card>
 

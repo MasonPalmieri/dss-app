@@ -10,6 +10,7 @@ export interface WizardFile {
   name: string;
   size: string;
   pages: number;
+  fileObject?: File; // real uploaded file, absent for demo docs
 }
 
 export interface WizardRecipient {
@@ -51,6 +52,14 @@ export default function NewDocumentWizard() {
     setRecipients((prev) => [
       ...prev,
       { id, name: "", email: "", role: "signer", order: prev.length + 1, authMethod: "none", color: COLORS[prev.length % COLORS.length] },
+    ]);
+  };
+
+  const addRecipientFromContact = (name: string, email: string) => {
+    const id = `r-${Date.now()}`;
+    setRecipients((prev) => [
+      ...prev,
+      { id, name, email, role: "signer", order: prev.length + 1, authMethod: "none", color: COLORS[prev.length % COLORS.length] },
     ]);
   };
 
@@ -96,6 +105,7 @@ export default function NewDocumentWizard() {
         <Step2Recipients
           recipients={recipients}
           addRecipient={addRecipient}
+          addRecipientFromContact={addRecipientFromContact}
           removeRecipient={removeRecipient}
           updateRecipient={updateRecipient}
           onNext={() => setStep(2)}

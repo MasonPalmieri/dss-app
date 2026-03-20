@@ -1,4 +1,5 @@
 // Client-side mock API — all data lives in memory, no backend needed
+import { sendCompletionEmail } from "./resend";
 
 export interface User {
   id: number; fullName: string; email: string; password: string;
@@ -593,7 +594,19 @@ export const mockApi = {
     const allSigned = allRecipients.every(r => r.status === "signed");
     if (allSigned) {
       const doc = store.documents.get(recipient.documentId);
-      if (doc) store.documents.set(doc.id, { ...doc, status: "completed", completedAt: new Date() });
+      if (doc) {
+        store.documents.set(doc.id, { ...doc, status: "completed", completedAt: new Date() });
+        // Send completion notification to the document sender
+        const sender = store.users.get(doc.senderId);
+        if (sender) {
+          sendCompletionEmail({
+            senderName: sender.fullName,
+            senderEmail: sender.email,
+            documentTitle: doc.title,
+            recipientCount: allRecipients.length,
+          }).catch(() => {}); // Non-blocking, non-critical
+        }
+      }
     }
     return { success: true };
   },

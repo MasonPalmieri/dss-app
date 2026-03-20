@@ -2,6 +2,7 @@ import { useState } from "react";
 import { mockApi } from "@/lib/mockApi";
 import { queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/contexts/auth-context";
+import { sendSigningRequestEmail, sendCompletionEmail } from "@/lib/resend";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -10,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { ArrowLeft, Send, Save, Loader2, FileText } from "lucide-react";
+import { ArrowLeft, Send, Save, Loader2, FileText, Mail } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { WizardFile, WizardRecipient, PlacedField } from "./index";
 
@@ -81,7 +82,31 @@ export default function Step4Send({ file, recipients, fields, documentId, setDoc
 
       if (!asDraft) {
         await mockApi.sendDocument(doc.id);
-        toast({ title: "Document sent!", description: `Sent to ${recipients.length} recipient(s)` });
+
+        // Fetch the created recipients to get their signing tokens
+        const createdRecipients = await mockApi.getRecipients(doc.id);
+
+        // Send real signing request emails via Resend
+        const senderName = user?.fullName || "DraftSendSign";
+        const emailPromises = createdRecipients.map((r) =>
+          sendSigningRequestEmail({
+            recipientName: r.name,
+            recipientEmail: r.email,
+            senderName,
+            documentTitle: subject,
+            subject: `${senderName} has sent you a document to sign: ${subject}`,
+            message,
+            signingToken: r.signingToken,
+          }).catch((err) => {
+            console.warn(`Failed to send email to ${r.email}:`, err);
+          })
+        );
+        await Promise.all(emailPromises);
+
+        toast({
+          title: "Document sent!",
+          description: `Signing request emailed to ${recipients.length} recipient(s)`,
+        });
       } else {
         toast({ title: "Draft saved" });
       }

@@ -22,13 +22,21 @@ export function useGate() {
   return useContext(GateContext);
 }
 
-export function GateProvider({ children }: { children: React.ReactNode }) {
+interface GateProviderProps {
+  children: React.ReactNode;
+  /** Called when the correct gate password is entered — use to auto-login demo user */
+  onUnlock?: () => void;
+}
+
+export function GateProvider({ children, onUnlock }: GateProviderProps) {
   // Pure in-memory state — persists for the lifetime of the React app instance
   const [isUnlocked, setIsUnlocked] = useState(false);
 
   const unlock = (password: string): boolean => {
     if (password === GATE_PASSWORD) {
       setIsUnlocked(true);
+      // Auto-login the demo user so the gate code bypasses the login screen
+      onUnlock?.();
       return true;
     }
     return false;

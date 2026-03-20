@@ -17,7 +17,6 @@ import {
   BarChart3,
   ArrowRight,
 } from "lucide-react";
-import { PerplexityAttribution } from "@/components/PerplexityAttribution";
 
 const features = [
   { icon: PenTool, title: "Drag & Drop Field Editor", desc: "Place signature, initials, date, text, and checkbox fields anywhere on your documents. Assign fields to specific recipients with color-coded identifiers." },
@@ -83,7 +82,6 @@ export default function FeaturesPage() {
       <footer className="border-t py-8">
         <div className="max-w-7xl mx-auto px-6 flex items-center justify-between">
           <p className="text-xs text-muted-foreground">2026 DraftSendSign. All rights reserved.</p>
-          <PerplexityAttribution />
         </div>
       </footer>
     </div>

@@ -6,7 +6,12 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
-import { CreditCard, Check, Download, Zap, FileText, Users } from "lucide-react";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { CreditCard, Check, Download, Zap, FileText, Users, ExternalLink } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 const PLANS = [
   {
@@ -40,15 +45,60 @@ const PLANS = [
 ];
 
 const INVOICES = [
-  { id: "INV-001", date: "2026-03-01", amount: "$25.00", status: "paid" },
-  { id: "INV-002", date: "2026-02-01", amount: "$25.00", status: "paid" },
-  { id: "INV-003", date: "2026-01-01", amount: "$25.00", status: "paid" },
+  { id: "INV-001", date: "Mar 1, 2026", amount: "$25.00", status: "paid" },
+  { id: "INV-002", date: "Feb 1, 2026", amount: "$25.00", status: "paid" },
+  { id: "INV-003", date: "Jan 1, 2026", amount: "$25.00", status: "paid" },
 ];
 
 export default function Billing() {
   const [annual, setAnnual] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState<typeof PLANS[0] | null>(null);
+  const [showEnterpriseModal, setShowEnterpriseModal] = useState(false);
+  const [plans, setPlans] = useState(PLANS);
+  const [contactForm, setContactForm] = useState({ name: "", email: "", company: "", message: "" });
+  const { toast } = useToast();
 
-  const currentPlan = PLANS.find((p) => p.current);
+  const currentPlan = plans.find((p) => p.current);
+
+  const handleSelectPlan = (plan: typeof PLANS[0]) => {
+    if (plan.current) return;
+    if (plan.monthlyPrice === null) {
+      setShowEnterpriseModal(true);
+      return;
+    }
+    setSelectedPlan(plan);
+  };
+
+  const handleUpgrade = () => {
+    if (!selectedPlan) return;
+    setPlans((prev) => prev.map((p) => ({ ...p, current: p.name === selectedPlan.name })));
+    toast({
+      title: `Upgraded to ${selectedPlan.name}`,
+      description: "Your plan has been updated. (Demo — no payment charged)",
+    });
+    setSelectedPlan(null);
+  };
+
+  const handleEnterpriseContact = () => {
+    if (!contactForm.email) { toast({ title: "Please enter your email", variant: "destructive" }); return; }
+    toast({
+      title: "Request submitted",
+      description: "Our sales team will contact you within 1 business day",
+    });
+    setShowEnterpriseModal(false);
+    setContactForm({ name: "", email: "", company: "", message: "" });
+  };
+
+  const handleInvoiceDownload = (inv: typeof INVOICES[0]) => {
+    const content = `INVOICE\n\nInvoice #: ${inv.id}\nDate: ${inv.date}\nAmount: ${inv.amount}\nStatus: ${inv.status}\n\nDraftSendSign — Professional Plan\n\nNote: This is a demo invoice export.`;
+    const blob = new Blob([content], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${inv.id}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="space-y-6">
@@ -70,7 +120,9 @@ export default function Billing() {
               </div>
               <div>
                 <p className="font-semibold">{currentPlan?.name} Plan</p>
-                <p className="text-sm text-muted-foreground">${currentPlan?.monthlyPrice}/month · Renews Apr 1, 2026</p>
+                <p className="text-sm text-muted-foreground">
+                  {currentPlan?.monthlyPrice === 0 ? "Free" : `$${currentPlan?.monthlyPrice}/month`} · Renews Apr 1, 2026
+                </p>
               </div>
             </div>
             <Badge className="bg-green-500/10 text-green-600 border-green-200">Active</Badge>
@@ -101,7 +153,13 @@ export default function Billing() {
                 <span className="text-sm font-medium">Payment Method</span>
               </div>
               <p className="text-sm">Visa ending in 4242</p>
-              <Button variant="link" className="h-auto p-0 text-xs text-[#c8210d]">Update</Button>
+              <Button
+                variant="link"
+                className="h-auto p-0 text-xs text-[#c8210d]"
+                onClick={() => toast({ title: "Payment update", description: "Stripe payment portal would open here in production" })}
+              >
+                Update card
+              </Button>
             </div>
           </div>
         </CardContent>
@@ -120,8 +178,17 @@ export default function Billing() {
         </div>
 
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {PLANS.map((plan) => (
-            <Card key={plan.name} className={plan.current ? "border-[#c8210d] border-2" : ""} data-testid={`plan-${plan.name.toLowerCase()}`}>
+          {plans.map((plan) => (
+            <Card
+              key={plan.name}
+              className={plan.current ? "border-[#c8210d] border-2 relative" : ""}
+              data-testid={`plan-${plan.name.toLowerCase()}`}
+            >
+              {plan.current && (
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                  <Badge className="bg-[#c8210d] text-white text-xs">Current Plan</Badge>
+                </div>
+              )}
               <CardContent className="pt-6 space-y-4">
                 <div>
                   <h3 className="font-semibold">{plan.name}</h3>
@@ -143,9 +210,10 @@ export default function Billing() {
                   ))}
                 </ul>
                 <Button
-                  className={plan.current ? "w-full" : "w-full"}
+                  className={plan.current ? "w-full" : "w-full bg-[#c8210d] hover:bg-[#a61b0b] text-white"}
                   variant={plan.current ? "outline" : "default"}
                   disabled={plan.current}
+                  onClick={() => handleSelectPlan(plan)}
                   data-testid={`select-plan-${plan.name.toLowerCase()}`}
                 >
                   {plan.current ? "Current Plan" : plan.monthlyPrice === null ? "Contact Sales" : "Upgrade"}
@@ -182,7 +250,7 @@ export default function Billing() {
                     <Badge variant="outline" className="capitalize text-green-600">{inv.status}</Badge>
                   </td>
                   <td className="px-4 py-3">
-                    <Button variant="ghost" size="icon" className="h-7 w-7">
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleInvoiceDownload(inv)}>
                       <Download className="h-4 w-4" />
                     </Button>
                   </td>
@@ -192,6 +260,68 @@ export default function Billing() {
           </table>
         </CardContent>
       </Card>
+
+      {/* Upgrade Confirmation Modal */}
+      <Dialog open={!!selectedPlan} onOpenChange={() => setSelectedPlan(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Upgrade to {selectedPlan?.name}</DialogTitle>
+            <DialogDescription>
+              You'll be charged ${annual ? selectedPlan?.annualPrice : selectedPlan?.monthlyPrice}/month.
+              This is a demo — no actual charge will occur.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            {selectedPlan?.features.map((f) => (
+              <div key={f} className="flex items-center gap-2 text-sm">
+                <Check className="h-4 w-4 text-green-500" /> {f}
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSelectedPlan(null)}>Cancel</Button>
+            <Button className="bg-[#c8210d] hover:bg-[#a61b0b] text-white" onClick={handleUpgrade}>
+              Confirm Upgrade
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Enterprise Contact Modal */}
+      <Dialog open={showEnterpriseModal} onOpenChange={setShowEnterpriseModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Contact Sales — Enterprise</DialogTitle>
+            <DialogDescription>
+              Tell us about your organization and we'll get back to you within 1 business day.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Your Name</Label>
+              <Input value={contactForm.name} onChange={(e) => setContactForm({ ...contactForm, name: e.target.value })} placeholder="Mason Palmieri" />
+            </div>
+            <div>
+              <Label>Work Email</Label>
+              <Input type="email" value={contactForm.email} onChange={(e) => setContactForm({ ...contactForm, email: e.target.value })} placeholder="mason@company.com" />
+            </div>
+            <div>
+              <Label>Company</Label>
+              <Input value={contactForm.company} onChange={(e) => setContactForm({ ...contactForm, company: e.target.value })} placeholder="Acme Inc." />
+            </div>
+            <div>
+              <Label>What are you looking for? (optional)</Label>
+              <Input value={contactForm.message} onChange={(e) => setContactForm({ ...contactForm, message: e.target.value })} placeholder="e.g., custom SSO, on-premise, volume pricing…" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowEnterpriseModal(false)}>Cancel</Button>
+            <Button className="bg-[#c8210d] hover:bg-[#a61b0b] text-white" onClick={handleEnterpriseContact}>
+              Submit Request
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

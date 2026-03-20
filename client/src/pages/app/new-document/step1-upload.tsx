@@ -18,20 +18,29 @@ interface Props {
 }
 
 export default function Step1Upload({ file, setFile, onNext }: Props) {
+  const processFile = useCallback(async (f: File) => {
+    // Get real page count from PDF
+    let pages = Math.max(1, Math.ceil(f.size / 50000));
+    try {
+      const pdfjsLib = await import('pdfjs-dist');
+      pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+      const buf = await f.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+      pages = pdf.numPages;
+    } catch {}
+    setFile({ name: f.name, size: `${(f.size / 1024).toFixed(1)} KB`, pages, fileObject: f });
+  }, [setFile]);
+
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     const f = e.dataTransfer.files[0];
-    if (f) {
-      setFile({ name: f.name, size: `${(f.size / 1024).toFixed(1)} KB`, pages: Math.max(1, Math.ceil(f.size / 50000)) });
-    }
-  }, [setFile]);
+    if (f) processFile(f);
+  }, [processFile]);
 
   const handleFileInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
-    if (f) {
-      setFile({ name: f.name, size: `${(f.size / 1024).toFixed(1)} KB`, pages: Math.max(1, Math.ceil(f.size / 50000)) });
-    }
-  }, [setFile]);
+    if (f) processFile(f);
+  }, [processFile]);
 
   return (
     <div className="space-y-6">
