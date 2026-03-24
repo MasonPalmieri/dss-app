@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useRoute, Link } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -10,12 +11,13 @@ import { Progress } from "@/components/ui/progress";
 import {
   ArrowLeft, Send, Download, MoreHorizontal, Clock, CheckCircle2,
   Eye, XCircle, FileText, Mail, PenTool, AlertCircle, RefreshCw,
-  Shield, Users, CalendarClock,
+  Shield, Users, CalendarClock, Loader2,
 } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
+import { generateSignedPdf } from "@/lib/generateSignedPdf";
 
 const STATUS_CONFIG: Record<string, { label: string; className: string; icon: any }> = {
   completed:  { label: "Completed",  className: "bg-green-500/15 text-green-600 border-green-500/20",   icon: CheckCircle2 },
@@ -54,6 +56,25 @@ export default function DocumentDetailPage() {
   const [, params] = useRoute("/documents/:id");
   const docId = params?.id;
   const { toast } = useToast();
+  const [downloading, setDownloading] = useState(false);
+
+  const handleDownload = async () => {
+    setDownloading(true);
+    try {
+      const pdfBytes = await generateSignedPdf(Number(docId));
+      const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${doc?.title || 'document'}-signed.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      toast({ title: 'Download failed', description: err.message, variant: 'destructive' });
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   const { data: doc, isLoading } = useQuery<any>({
     queryKey: [`/api/documents/${docId}`],
@@ -151,8 +172,9 @@ export default function DocumentDetailPage() {
               <Button variant="outline" size="icon"><MoreHorizontal className="h-4 w-4" /></Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => toast({ title: "Download started", description: "PDF generation requires backend — coming soon." })}>
-                <Download className="h-4 w-4 mr-2" />Download PDF
+              <DropdownMenuItem onClick={handleDownload} disabled={downloading}>
+                {downloading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
+                Download PDF
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => { queryClient.invalidateQueries({ queryKey: [`/api/documents/${docId}`] }); toast({ title: "Status refreshed" }); }}>
                 <RefreshCw className="h-4 w-4 mr-2" />Refresh Status
@@ -332,15 +354,11 @@ export default function DocumentDetailPage() {
                 variant="outline"
                 className="w-full text-sm"
                 data-testid="download-doc"
-                onClick={() => {
-                  toast({
-                    title: "Download started",
-                    description: "Your PDF is being prepared. This feature requires backend PDF generation — coming soon.",
-                  });
-                }}
+                onClick={handleDownload}
+                disabled={downloading}
               >
-                <Download className="h-4 w-4 mr-2" />
-                Download PDF
+                {downloading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
+                {downloading ? 'Generating PDF...' : 'Download PDF'}
               </Button>
             </CardContent>
           </Card>

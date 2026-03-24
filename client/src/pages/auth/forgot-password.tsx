@@ -5,34 +5,51 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { ArrowLeft, Mail, KeyRound, Check, Loader2 } from "lucide-react";
+import { supabase } from "@/lib/supabase";
 
 type Step = "email" | "code" | "reset" | "done";
 
-export default function ForgotPasswordPage() {
-  const [step, setStep] = useState<Step>("email");
+interface ForgotPasswordPageProps {
+  initialStep?: Step;
+  [key: string]: any;
+}
+
+export default function ForgotPasswordPage({ initialStep = "email" }: ForgotPasswordPageProps) {
+  const [step, setStep] = useState<Step>(initialStep);
   const [email, setEmail] = useState("");
-  const [code, setCode] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleEmailSubmit = (e: React.FormEvent) => {
+  const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setTimeout(() => { setLoading(false); setStep("code"); }, 1000);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: "https://app.draftsendsign.com/#/reset-password",
+      });
+      if (error) throw error;
+      setStep("code"); // repurposed: now shows "check your email" message
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleCodeSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setTimeout(() => { setLoading(false); setStep("reset"); }, 1000);
-  };
-
-  const handleResetSubmit = (e: React.FormEvent) => {
+  const handleResetSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (password !== confirm) return;
     setLoading(true);
-    setTimeout(() => { setLoading(false); setStep("done"); }, 1000);
+    try {
+      const { error } = await supabase.auth.updateUser({ password });
+      if (error) throw error;
+      setStep("done");
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -79,7 +96,7 @@ export default function ForgotPasswordPage() {
               <form onSubmit={handleEmailSubmit} className="space-y-4">
                 <div className="text-center mb-4">
                   <Mail className="h-10 w-10 text-muted-foreground mx-auto mb-2" />
-                  <p className="text-sm text-muted-foreground">Enter your email and we'll send you a reset code.</p>
+                  <p className="text-sm text-muted-foreground">Enter your email and we'll send you a reset link.</p>
                 </div>
                 <div>
                   <Label htmlFor="email">Email</Label>
@@ -87,25 +104,36 @@ export default function ForgotPasswordPage() {
                 </div>
                 <Button type="submit" className="w-full bg-[#c8210d] hover:bg-[#a61b0b] text-white" disabled={loading} data-testid="forgot-submit-email">
                   {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                  Send Reset Code
+                  Send Reset Link
                 </Button>
               </form>
             )}
 
             {step === "code" && (
-              <form onSubmit={handleCodeSubmit} className="space-y-4">
+              <div className="space-y-4">
                 <div className="text-center mb-4">
-                  <p className="text-sm text-muted-foreground">We sent a 6-digit code to <strong>{email}</strong></p>
+                  <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                    <Mail className="h-8 w-8" />
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    We sent a password reset link to <strong>{email}</strong>. Click the link in your email to set a new password.
+                  </p>
                 </div>
-                <div>
-                  <Label htmlFor="code">Verification Code</Label>
-                  <Input id="code" placeholder="000000" value={code} onChange={(e) => setCode(e.target.value)} required maxLength={6} data-testid="forgot-code" />
-                </div>
-                <Button type="submit" className="w-full bg-[#c8210d] hover:bg-[#a61b0b] text-white" disabled={loading} data-testid="forgot-submit-code">
-                  {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                  Verify Code
+                <Button
+                  className="w-full bg-[#c8210d] hover:bg-[#a61b0b] text-white"
+                  onClick={() => setStep("reset")}
+                  data-testid="forgot-submit-code"
+                >
+                  I already clicked the link
                 </Button>
-              </form>
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => setStep("email")}
+                >
+                  Resend email
+                </Button>
+              </div>
             )}
 
             {step === "reset" && (

@@ -44,7 +44,7 @@ import MassSignPage from "@/pages/mass-sign";
 import NotFound from "@/pages/not-found";
 
 // Routes that are always public — no gate required
-const PUBLIC_ROUTES = ["/", "/pricing", "/features", "/security", "/about"];
+const PUBLIC_ROUTES = ["/", "/pricing", "/features", "/security", "/about", "/login", "/signup", "/forgot-password", "/reset-password"];
 
 function isPublicPath(path: string): boolean {
   if (PUBLIC_ROUTES.includes(path)) return true;
@@ -88,20 +88,50 @@ function AppRoutes() {
 
 function GatedAppRouter() {
   const { isUnlocked } = useGate();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
   const [location] = useLocation();
 
-  // If trying to reach a non-public route and not unlocked → show gate
-  if (!isPublicPath(location) && !isUnlocked) {
+  // Supabase is checking for an existing session — show nothing to avoid
+  // flashing the gate screen at users who are already logged in
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-[#0d1117] flex items-center justify-center">
+        <div className="h-6 w-6 border-2 border-[#c8210d] border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  // Public routes (sign, mass-sign, marketing, auth) bypass the gate entirely
+  if (isPublicPath(location)) {
+    return (
+      <Switch>
+        <Route path="/" component={MarketingHome} />
+        <Route path="/pricing" component={Pricing} />
+        <Route path="/features" component={Features} />
+        <Route path="/security" component={Security} />
+        <Route path="/about" component={About} />
+        <Route path="/login" component={Login} />
+        <Route path="/signup" component={Signup} />
+        <Route path="/forgot-password" component={ForgotPassword} />
+        <Route path="/reset-password">{() => <ForgotPassword initialStep="reset" />}</Route>
+        <Route path="/sign/:token" component={SigningPage} />
+        <Route path="/mass-sign/:token" component={MassSignPage} />
+        <Route component={NotFound} />
+      </Switch>
+    );
+  }
+
+  // Not unlocked and not authenticated → show gate
+  if (!isUnlocked && !isAuthenticated) {
     return <GateScreen />;
   }
 
-  // After gate unlock + auto-login: redirect from marketing/login pages to dashboard
-  if (isUnlocked && isAuthenticated && (location === "/" || location === "/login" || location === "/signup")) {
+  // Authenticated but on root/login/signup → go straight to dashboard
+  if (isAuthenticated && (location === "/" || location === "/login" || location === "/signup")) {
     return <Redirect to="/dashboard" />;
   }
 
-  // App routes get the persistent layout shell (sidebar never remounts)
+  // App routes get the persistent layout shell
   if (isAppPath(location)) {
     return (
       <AppLayout>
@@ -112,24 +142,11 @@ function GatedAppRouter() {
 
   return (
     <Switch>
-      {/* Marketing (always public) */}
-      <Route path="/" component={MarketingHome} />
-      <Route path="/pricing" component={Pricing} />
-      <Route path="/features" component={Features} />
-      <Route path="/security" component={Security} />
-      <Route path="/about" component={About} />
-
-      {/* Auth — behind gate */}
+      {/* Auth pages — behind gate */}
       <Route path="/login" component={Login} />
       <Route path="/signup" component={Signup} />
       <Route path="/forgot-password" component={ForgotPassword} />
-
-      {/* Signer experience — always public */}
-      <Route path="/sign/:token" component={SigningPage} />
-
-      {/* Mass Signature public signing page — always public */}
-      <Route path="/mass-sign/:token" component={MassSignPage} />
-
+      <Route path="/reset-password">{() => <ForgotPassword initialStep="reset" />}</Route>
       <Route component={NotFound} />
     </Switch>
   );
@@ -141,8 +158,16 @@ function AuthenticatedGate({ children }: { children: React.ReactNode }) {
   const { login } = useAuth();
 
   const handleUnlock = () => {
-    // Silently log in as the demo account whenever the gate is unlocked
-    login("help@draftsendsign.com", "demo").catch(() => {});
+    // Log in as demo account, then navigate to dashboard once auth resolves
+    login("help@draftsendsign.com", "demo")
+      .then(() => {
+        // Use hash navigation so wouter picks it up
+        window.location.hash = "/dashboard";
+      })
+      .catch(() => {
+        // Login failed — gate is still unlocked, user sees login page
+        window.location.hash = "/login";
+      });
   };
 
   return (

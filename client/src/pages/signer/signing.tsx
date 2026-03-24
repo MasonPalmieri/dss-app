@@ -25,8 +25,93 @@ import {
   CheckCircle2,
   FileText,
   X,
+  AlertCircle,
+  Clock,
 } from "lucide-react";
 import { useHashLocation } from "wouter/use-hash-location";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
+
+// Renders a single PDF page from storage as a canvas image
+function PdfPageViewer({
+  filePath,
+  pageNum,
+}: {
+  filePath: string;
+  pageNum: number;
+}) {
+  const [imgSrc, setImgSrc] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(false);
+    setImgSrc(null);
+
+    (async () => {
+      try {
+        const { data: fileData } = await supabaseAdmin.storage
+          .from("documents")
+          .download(filePath);
+        if (!fileData || cancelled) return;
+
+        const buf = await fileData.arrayBuffer();
+        const pdfjsLib = await import("pdfjs-dist");
+        const workerUrl = new URL(
+          "pdfjs-dist/build/pdf.worker.min.mjs",
+          import.meta.url
+        ).href;
+        pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
+
+        const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+        const page = await pdf.getPage(pageNum);
+        const viewport = page.getViewport({ scale: 1.5 });
+        const canvas = document.createElement("canvas");
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        const ctx = canvas.getContext("2d")!;
+        await (page.render as any)({ canvasContext: ctx, viewport }).promise;
+        if (!cancelled) setImgSrc(canvas.toDataURL("image/jpeg", 0.92));
+      } catch (err) {
+        console.error("PDF viewer error:", err);
+        if (!cancelled) setError(true);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [filePath, pageNum]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center w-full h-full min-h-[400px] bg-muted/20">
+        <div className="animate-spin h-8 w-8 border-2 border-[#c8210d] border-t-transparent rounded-full" />
+      </div>
+    );
+  }
+
+  if (error || !imgSrc) {
+    return (
+      <div className="flex flex-col items-center justify-center w-full h-full min-h-[400px] text-muted-foreground">
+        <FileText className="h-12 w-12 mb-2 opacity-30" />
+        <p className="text-sm">Could not render PDF</p>
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={imgSrc}
+      alt={`Page ${pageNum}`}
+      className="w-full h-auto block"
+      style={{ display: "block" }}
+    />
+  );
+}
 
 export default function SigningPage() {
   const [location] = useHashLocation();
@@ -55,6 +140,12 @@ export default function SigningPage() {
   const fields = signingData?.fields || [];
 
   const currentField = fields[currentFieldIndex];
+
+  // Task 6: Expiry, void, already-signed checks
+  const isExpired =
+    document?.expiresAt && new Date(document.expiresAt) < new Date();
+  const isVoided = document?.status === "voided";
+  const alreadySigned = recipient?.status === "signed";
 
   const submitMutation = useMutation({
     mutationFn: async () => {
@@ -178,15 +269,16 @@ export default function SigningPage() {
       setShowSignModal(true);
     } else {
       // Auto-fill for other field types
-      const autoValue = currentField.type === "date"
-        ? new Date().toLocaleDateString()
-        : currentField.type === "name"
-        ? recipient?.name || ""
-        : currentField.type === "company"
-        ? "Company Name"
-        : currentField.type === "title"
-        ? "Title"
-        : "";
+      const autoValue =
+        currentField.type === "date"
+          ? new Date().toLocaleDateString()
+          : currentField.type === "name"
+          ? recipient?.name || ""
+          : currentField.type === "company"
+          ? "Company Name"
+          : currentField.type === "title"
+          ? "Title"
+          : "";
       if (autoValue) {
         setFieldValues((prev) => ({ ...prev, [currentField.id]: autoValue }));
       }
@@ -221,6 +313,64 @@ export default function SigningPage() {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin h-8 w-8 border-2 border-[#c8210d] border-t-transparent rounded-full" />
+      </div>
+    );
+  }
+
+  // Task 6: Status screens for expired / voided / already signed
+  if (alreadySigned) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center p-4">
+        <Card className="max-w-md w-full text-center">
+          <CardContent className="pt-12 pb-8 space-y-4">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-green-500/10 text-green-500 mx-auto">
+              <CheckCircle2 className="h-8 w-8" />
+            </div>
+            <h1 className="text-2xl font-bold">Already Signed</h1>
+            <p className="text-muted-foreground">
+              You have already signed this document. Thank you.
+            </p>
+            <p className="text-xs text-muted-foreground">You may close this window.</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (isExpired) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center p-4">
+        <Card className="max-w-md w-full text-center">
+          <CardContent className="pt-12 pb-8 space-y-4">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-orange-500/10 text-orange-500 mx-auto">
+              <Clock className="h-8 w-8" />
+            </div>
+            <h1 className="text-2xl font-bold">Link Expired</h1>
+            <p className="text-muted-foreground">
+              This signing link has expired. Please contact the sender to request a new link.
+            </p>
+            <p className="text-xs text-muted-foreground">You may close this window.</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (isVoided) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center p-4">
+        <Card className="max-w-md w-full text-center">
+          <CardContent className="pt-12 pb-8 space-y-4">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-red-500/10 text-red-500 mx-auto">
+              <AlertCircle className="h-8 w-8" />
+            </div>
+            <h1 className="text-2xl font-bold">Document Voided</h1>
+            <p className="text-muted-foreground">
+              This document has been voided. Please contact the sender for more information.
+            </p>
+            <p className="text-xs text-muted-foreground">You may close this window.</p>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -263,54 +413,109 @@ export default function SigningPage() {
             <div className="bg-muted/30 p-4">
               <div
                 className="relative bg-white dark:bg-gray-900 shadow-md mx-auto"
-                style={{ width: "100%", maxWidth: 612, aspectRatio: "8.5/11" }}
+                style={{ width: "100%", maxWidth: 612, aspectRatio: document?.filePath ? undefined : "8.5/11" }}
                 data-testid="signing-canvas"
               >
-                {/* Mock page lines */}
-                <div className="absolute inset-0 p-12 space-y-3 pointer-events-none opacity-20">
-                  {[...Array(25)].map((_, i) => (
-                    <div key={i} className="h-2 bg-gray-400 rounded" style={{ width: `${60 + Math.random() * 35}%` }} />
-                  ))}
-                </div>
-
-                {/* Fields */}
-                {fields.map((f: any, idx: number) => {
-                  const isFilled = !!fieldValues[f.id];
-                  const isCurrent = idx === currentFieldIndex;
-                  return (
-                    <div
-                      key={f.id}
-                      className={`absolute border-2 rounded cursor-pointer flex items-center justify-center transition-all ${
-                        isCurrent
-                          ? "border-[#c8210d] bg-[#c8210d]/10 ring-2 ring-[#c8210d]/30"
-                          : isFilled
-                          ? "border-green-500 bg-green-500/10"
-                          : "border-gray-300 bg-gray-100/50"
-                      }`}
-                      style={{
-                        left: f.x,
-                        top: f.y,
-                        width: f.width || 180,
-                        height: f.height || 50,
-                      }}
-                      onClick={() => {
-                        setCurrentFieldIndex(idx);
-                        if (f.type === "signature" || f.type === "initials") {
-                          setShowSignModal(true);
-                        }
-                      }}
-                      data-testid={`signing-field-${f.id}`}
-                    >
-                      {isFilled ? (
-                        <span className="text-xs font-medium text-green-700 truncate px-1">
-                          {fieldValues[f.id]?.startsWith("typed:") ? fieldValues[f.id].replace("typed:", "") : fieldValues[f.id]?.startsWith("data:") ? "Signed" : fieldValues[f.id]}
-                        </span>
-                      ) : (
-                        <span className="text-[10px] text-muted-foreground">{f.label || f.type}</span>
-                      )}
+                {/* PDF Viewer or Mock */}
+                {document?.filePath ? (
+                  <div className="relative w-full">
+                    <PdfPageViewer filePath={document.filePath} pageNum={1} />
+                    {/* Fields overlaid on PDF */}
+                    {fields.map((f: any, idx: number) => {
+                      const isFilled = !!fieldValues[f.id];
+                      const isCurrent = idx === currentFieldIndex;
+                      return (
+                        <div
+                          key={f.id}
+                          className={`absolute border-2 rounded cursor-pointer flex items-center justify-center transition-all ${
+                            isCurrent
+                              ? "border-[#c8210d] bg-[#c8210d]/10 ring-2 ring-[#c8210d]/30"
+                              : isFilled
+                              ? "border-green-500 bg-green-500/10"
+                              : "border-gray-300 bg-gray-100/50"
+                          }`}
+                          style={{
+                            left: f.x,
+                            top: f.y,
+                            width: f.width || 180,
+                            height: f.height || 50,
+                          }}
+                          onClick={() => {
+                            setCurrentFieldIndex(idx);
+                            if (f.type === "signature" || f.type === "initials") {
+                              setShowSignModal(true);
+                            }
+                          }}
+                          data-testid={`signing-field-${f.id}`}
+                        >
+                          {isFilled ? (
+                            <span className="text-xs font-medium text-green-700 truncate px-1">
+                              {fieldValues[f.id]?.startsWith("typed:")
+                                ? fieldValues[f.id].replace("typed:", "")
+                                : fieldValues[f.id]?.startsWith("data:")
+                                ? "Signed"
+                                : fieldValues[f.id]}
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-muted-foreground">{f.label || f.type}</span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <>
+                    {/* Mock page lines for documents without uploaded PDF */}
+                    <div className="absolute inset-0 p-12 space-y-3 pointer-events-none opacity-20">
+                      {[...Array(25)].map((_, i) => (
+                        <div key={i} className="h-2 bg-gray-400 rounded" style={{ width: `${60 + Math.random() * 35}%` }} />
+                      ))}
                     </div>
-                  );
-                })}
+
+                    {/* Fields */}
+                    {fields.map((f: any, idx: number) => {
+                      const isFilled = !!fieldValues[f.id];
+                      const isCurrent = idx === currentFieldIndex;
+                      return (
+                        <div
+                          key={f.id}
+                          className={`absolute border-2 rounded cursor-pointer flex items-center justify-center transition-all ${
+                            isCurrent
+                              ? "border-[#c8210d] bg-[#c8210d]/10 ring-2 ring-[#c8210d]/30"
+                              : isFilled
+                              ? "border-green-500 bg-green-500/10"
+                              : "border-gray-300 bg-gray-100/50"
+                          }`}
+                          style={{
+                            left: f.x,
+                            top: f.y,
+                            width: f.width || 180,
+                            height: f.height || 50,
+                          }}
+                          onClick={() => {
+                            setCurrentFieldIndex(idx);
+                            if (f.type === "signature" || f.type === "initials") {
+                              setShowSignModal(true);
+                            }
+                          }}
+                          data-testid={`signing-field-${f.id}`}
+                        >
+                          {isFilled ? (
+                            <span className="text-xs font-medium text-green-700 truncate px-1">
+                              {fieldValues[f.id]?.startsWith("typed:")
+                                ? fieldValues[f.id].replace("typed:", "")
+                                : fieldValues[f.id]?.startsWith("data:")
+                                ? "Signed"
+                                : fieldValues[f.id]}
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-muted-foreground">{f.label || f.type}</span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </>
+                )}
               </div>
             </div>
           </CardContent>
@@ -473,7 +678,7 @@ export default function SigningPage() {
                   const input = document.createElement("input");
                   input.type = "file";
                   input.accept = "image/*";
-                  input.onchange = (e) => {
+                  input.onchange = (e: Event) => {
                     const file = (e.target as HTMLInputElement).files?.[0];
                     if (file) {
                       const reader = new FileReader();

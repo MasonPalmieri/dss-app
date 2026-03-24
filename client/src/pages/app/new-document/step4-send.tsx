@@ -37,12 +37,28 @@ export default function Step4Send({ file, recipients, fields, documentId, setDoc
   const createAndSend = async (asDraft: boolean) => {
     setSending(true);
     try {
+      // Upload PDF to Supabase Storage if a real file was uploaded
+      let filePath: string | null = null;
+      if (file?.fileObject) {
+        const { supabaseAdmin } = await import('@/lib/supabaseAdmin');
+        const path = `${user?.id}/${Date.now()}-${file.name.replace(/\s+/g, '_')}`;
+        const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
+          .from('documents')
+          .upload(path, file.fileObject, { contentType: 'application/pdf', upsert: false });
+        if (!uploadError && uploadData) {
+          filePath = uploadData.path;
+        } else if (uploadError) {
+          console.warn('PDF upload failed:', uploadError.message);
+        }
+      }
+
       // Create document
       const doc = await mockApi.createDocument({
         title: subject,
         senderId: user?.id || 1,
         fileName: file?.name || "document.pdf",
         fileSize: file?.size || "0KB",
+        filePath,
         subject,
         message,
         reminderFrequency,
