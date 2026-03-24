@@ -1,12 +1,13 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 import { mockApi } from "./mockApi";
 
-// Route all API calls through the client-side mockApi — no backend needed
+// Route all API calls through the Supabase-backed mockApi — no backend server needed
 async function mockFetch(url: string, method = "GET", body?: unknown): Promise<unknown> {
   const u = url.replace(/^\/?/, "/").split("?");
   const path = u[0];
   const params = new URLSearchParams(u[1] || "");
-  const userId = parseInt(params.get("userId") || "1");
+  // userId is now a UUID string; fall back to empty string if not provided
+  const userId = params.get("userId") || "";
 
   // Auth
   if (path === "/api/auth/login" && method === "POST") return mockApi.login((body as any).email, (body as any).password);
@@ -64,12 +65,24 @@ async function mockFetch(url: string, method = "GET", body?: unknown): Promise<u
   if (path === "/api/notifications/read-all" && method === "POST") return mockApi.markAllNotificationsRead(userId);
 
   // Signer
-  if (path.match(/^\/api\/sign\/(.+)$/) && method === "GET") return mockApi.getSignerInfo(path.split("/sign/")[1]);
-  if (path.match(/^\/api\/sign\/(.+)$/) && method === "POST") return mockApi.submitSignature(path.split("/sign/")[1], body as any);
+  if (path.match(/^\/api\/sign\/.+$/) && method === "GET") return mockApi.getSignerInfo(path.split("/sign/")[1]);
+  if (path.match(/^\/api\/sign\/.+$/) && method === "POST") return mockApi.submitSignature(path.split("/sign/")[1], body as any);
 
   // Users
-  if (path.match(/^\/api\/users\/(\d+)$/) && method === "GET") return mockApi.getUser(parseInt(path.split("/")[3]));
-  if (path.match(/^\/api\/users\/(\d+)$/) && method === "PATCH") return mockApi.updateUser(parseInt(path.split("/")[3]), body as any);
+  if (path.match(/^\/api\/users\/.+$/) && method === "GET") return mockApi.getUser(path.split("/")[3]);
+  if (path.match(/^\/api\/users\/.+$/) && method === "PATCH") return mockApi.updateUser(path.split("/")[3], body as any);
+
+  // Mass campaigns
+  if (path === "/api/mass-campaigns" && method === "GET") return mockApi.getMassCampaigns(userId);
+  if (path === "/api/mass-campaigns" && method === "POST") {
+    const b = body as any;
+    return mockApi.createMassCampaign(userId, { title: b.title, description: b.description, documentName: b.documentName });
+  }
+  if (path.match(/^\/api\/mass-campaigns\/(\d+)$/) && method === "GET") return mockApi.getMassCampaign(parseInt(path.split("/")[3]));
+  if (path.match(/^\/api\/mass-campaigns\/(\d+)\/status$/) && method === "PATCH") return mockApi.updateMassCampaignStatus(parseInt(path.split("/")[3]), (body as any).status);
+  if (path.match(/^\/api\/mass-campaigns\/(\d+)$/) && method === "DELETE") return mockApi.deleteMassCampaign(parseInt(path.split("/")[3]));
+  if (path.match(/^\/api\/mass-campaigns\/token\/.+$/) && method === "GET") return mockApi.getMassCampaignByToken(path.split("/token/")[1]);
+  if (path.match(/^\/api\/mass-campaigns\/(\d+)\/signers$/) && method === "GET") return mockApi.getMassSigners(parseInt(path.split("/")[3]));
 
   console.warn("[mockFetch] Unhandled route:", method, path);
   return null;
@@ -89,9 +102,9 @@ export async function apiRequest(method: string, url: string, data?: unknown): P
 
 type UnauthorizedBehavior = "returnNull" | "throw";
 
-export const getQueryFn: <T>(options: { on401: UnauthorizedBehavior }) => QueryFunction<T> =
-  ({ on401: unauthorizedBehavior }) =>
-  async ({ queryKey }) => {
+export function getQueryFn<T>(options: { on401: UnauthorizedBehavior }): QueryFunction<T> {
+  const { on401: unauthorizedBehavior } = options;
+  return async ({ queryKey }) => {
     const [path, ...rest] = queryKey as string[];
     let url = path;
     if (rest.length > 0 && rest.length % 2 === 0) {
@@ -102,12 +115,13 @@ export const getQueryFn: <T>(options: { on401: UnauthorizedBehavior }) => QueryF
       url = `${path}?${params.toString()}`;
     }
     try {
-      return await mockFetch(url) as T;
+      return (await mockFetch(url)) as T;
     } catch (err: any) {
       if (unauthorizedBehavior === "returnNull" && err.message?.startsWith("401")) return null as T;
       throw err;
     }
   };
+}
 
 export const queryClient = new QueryClient({
   defaultOptions: {

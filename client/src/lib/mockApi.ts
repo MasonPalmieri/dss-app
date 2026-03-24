@@ -1,563 +1,870 @@
-// Client-side mock API — all data lives in memory, no backend needed
+// Real Supabase API — replaces in-memory mock
+// All function signatures kept identical to the old mockApi for zero UI changes.
+import { supabase } from "./supabase";
 import { sendCompletionEmail } from "./resend";
 
+// ─── Types (IDs for join tables are now bigint → number; userId is string UUID) ───
+
 export interface User {
-  id: number; fullName: string; email: string; password: string;
-  company: string; role: string; plan: string; avatarInitials: string;
-  twoFactorEnabled: boolean; createdAt: Date;
+  id: string; // UUID
+  fullName: string;
+  email: string;
+  company: string;
+  role: string;
+  plan: string;
+  avatarInitials: string;
+  twoFactorEnabled: boolean;
+  createdAt: Date;
 }
 export interface Document {
-  id: number; title: string; status: string; senderId: number;
-  fileName: string; fileSize: string; subject: string; message: string;
-  expiresAt: Date | null; sentAt: Date | null; completedAt: Date | null;
-  createdAt: Date; updatedAt: Date; templateId: number | null;
-  reminderFrequency: string; tags: string[];
+  id: number;
+  title: string;
+  status: string;
+  senderId: string | number; // UUID string or legacy number fallback
+  fileName: string;
+  fileSize: string;
+  filePath?: string | null;
+  subject: string;
+  message: string;
+  expiresAt: Date | null;
+  sentAt: Date | null;
+  completedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+  templateId: number | null;
+  reminderFrequency: string;
+  tags: string[];
 }
 export interface Recipient {
-  id: number; documentId: number; name: string; email: string;
-  role: string; signingOrder: number; status: string; authMethod: string;
-  authPhone: string | null; signedAt: Date | null; viewedAt: Date | null;
-  signingToken: string; color: string;
+  id: number;
+  documentId: number;
+  name: string;
+  email: string;
+  role: string;
+  signingOrder: number;
+  status: string;
+  authMethod: string;
+  authPhone: string | null;
+  signedAt: Date | null;
+  viewedAt: Date | null;
+  signingToken: string;
+  color: string;
 }
 export interface DocumentField {
-  id: number; documentId: number; recipientId: number | null;
-  type: string; label: string; required: boolean;
-  x: number; y: number; width: number; height: number; page: number;
+  id: number;
+  documentId: number;
+  recipientId: number | null;
+  type: string;
+  label: string;
+  required: boolean;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  page: number;
   value: string | null;
 }
 export interface Template {
-  id: number; name: string; description: string; creatorId: number;
-  fileName: string; usageCount: number; createdAt: Date; updatedAt: Date;
+  id: number;
+  name: string;
+  description: string;
+  creatorId: string; // UUID
+  fileName: string;
+  filePath?: string | null;
+  usageCount: number;
+  createdAt: Date;
+  updatedAt: Date;
 }
 export interface Contact {
-  id: number; userId: number; name: string; email: string;
-  organization: string; phone: string | null; createdAt: Date;
+  id: number;
+  userId: string; // UUID
+  name: string;
+  email: string;
+  organization: string;
+  phone: string | null;
+  createdAt: Date;
 }
 export interface TeamMember {
-  id: number; userId: number; invitedEmail: string; invitedName: string;
-  role: string; status: string; invitedAt: Date; joinedAt: Date | null;
+  id: number;
+  userId: string; // UUID
+  invitedEmail: string;
+  invitedName: string;
+  role: string;
+  status: string;
+  invitedAt: Date;
+  joinedAt: Date | null;
 }
 export interface AuditLog {
-  id: number; documentId: number; userId: number; recipientId: number | null;
-  action: string; actorName: string; actorEmail: string;
-  ipAddress: string; userAgent: string; metadata: object; createdAt: Date;
+  id: number;
+  documentId: number;
+  userId: string | null; // UUID
+  recipientId: number | null;
+  action: string;
+  actorName: string;
+  actorEmail: string;
+  ipAddress: string;
+  userAgent: string;
+  metadata: object;
+  createdAt: Date;
 }
 export interface Notification {
-  id: number; userId: number; type: string; title: string; message: string;
-  documentId: number | null; read: boolean; createdAt: Date;
+  id: number;
+  userId: string; // UUID
+  type: string;
+  title: string;
+  message: string;
+  documentId: number | null;
+  read: boolean;
+  createdAt: Date;
 }
 export interface MassCampaign {
-  id: number; userId: number; title: string; description: string;
-  documentName: string; status: "active" | "paused" | "closed";
-  signerCount: number; createdAt: Date; updatedAt: Date;
-  // The public token used in the signing URL
+  id: number;
+  userId: string; // UUID
+  title: string;
+  description: string;
+  documentName: string;
+  filePath?: string | null;
+  status: "active" | "paused" | "closed";
+  signerCount: number;
+  createdAt: Date;
+  updatedAt: Date;
   publicToken: string;
 }
 export interface MassSigner {
-  id: number; campaignId: number; fullName: string;
-  signedAt: Date; ipAddress: string;
-  // Base64 signature data URI
+  id: number;
+  campaignId: number;
+  fullName: string;
+  signedAt: Date;
+  ipAddress: string;
   signatureData: string;
 }
 
-class MockStore {
-  users = new Map<number, User>();
-  documents = new Map<number, Document>();
-  recipients = new Map<number, Recipient>();
-  fields = new Map<number, DocumentField>();
-  templates = new Map<number, Template>();
-  contacts = new Map<number, Contact>();
-  teamMembers = new Map<number, TeamMember>();
-  auditLogs = new Map<number, AuditLog>();
-  notifications = new Map<number, Notification>();
-  massCampaigns = new Map<number, MassCampaign>();
-  massSigners = new Map<number, MassSigner>();
+// ─── Row-to-model mappers ─────────────────────────────────────────────────────
 
-  counters = { users: 2, documents: 8, recipients: 8, fields: 1, templates: 5, contacts: 6, team: 4, audit: 8, notifications: 5, campaigns: 3, signers: 10 };
-
-  constructor() { this.seed(); }
-
-  private seed() {
-    const now = new Date();
-
-    // Demo user
-    this.users.set(1, {
-      id: 1, fullName: "Mason Palmieri", email: "help@draftsendsign.com",
-      password: "demo", company: "DraftSendSign", role: "admin",
-      plan: "professional", avatarInitials: "MP", twoFactorEnabled: false, createdAt: now,
-    });
-
-    // Documents
-    const statuses = ["completed", "pending", "draft", "completed", "declined", "pending", "completed"];
-    const titles = [
-      "Software Development Agreement", "NDA - Acme Corp", "Employment Contract - John Smith",
-      "Vendor Services Agreement", "Consulting Agreement", "Real Estate Purchase Agreement", "Partnership Agreement"
-    ];
-    const names = ["Sarah Johnson", "Michael Chen", "Emily Davis", "Robert Wilson", "Lisa Park", "James Brown", "Maria Garcia"];
-    const emails = ["sarah@acme.com", "michael@techco.com", "emily@startup.io", "robert@realty.com", "lisa@law.com", "james@corp.com", "maria@agency.co"];
-    const sizes = ["342KB", "218KB", "489KB", "156KB", "302KB", "527KB", "198KB"];
-
-    titles.forEach((title, i) => {
-      const docId = i + 1;
-      const sentAt = new Date(Date.now() - (i + 1) * 3 * 24 * 60 * 60 * 1000);
-      this.documents.set(docId, {
-        id: docId, title, status: statuses[i], senderId: 1,
-        fileName: `${title.toLowerCase().replace(/\s/g, '_')}.pdf`,
-        fileSize: sizes[i], subject: `Please sign: ${title}`,
-        message: "Please review and sign at your earliest convenience.",
-        expiresAt: new Date(sentAt.getTime() + 30 * 24 * 60 * 60 * 1000),
-        sentAt: statuses[i] !== "draft" ? sentAt : null,
-        completedAt: statuses[i] === "completed" ? new Date(sentAt.getTime() + 2 * 24 * 60 * 60 * 1000) : null,
-        createdAt: sentAt, updatedAt: sentAt, templateId: null,
-        reminderFrequency: "3days", tags: [],
-      });
-      this.recipients.set(docId, {
-        id: docId, documentId: docId, name: names[i], email: emails[i],
-        role: "signer", signingOrder: 1,
-        status: statuses[i] === "completed" ? "signed" : statuses[i] === "pending" ? "viewed" : "pending",
-        authMethod: "none", authPhone: null,
-        signedAt: statuses[i] === "completed" ? new Date(sentAt.getTime() + 2 * 24 * 60 * 60 * 1000) : null,
-        viewedAt: statuses[i] !== "draft" ? new Date(sentAt.getTime() + 60 * 60 * 1000) : null,
-        signingToken: `token_${docId}_${i}`, color: "#3b82f6",
-      });
-      this.auditLogs.set(docId, {
-        id: docId, documentId: docId, userId: 1, recipientId: null,
-        action: "document_created", actorName: "Mason Palmieri", actorEmail: "help@draftsendsign.com",
-        ipAddress: "192.168.1.1", userAgent: "Chrome/120", metadata: {}, createdAt: sentAt,
-      });
-    });
-
-    // Templates
-    [
-      { name: "Standard NDA", description: "One-way non-disclosure agreement" },
-      { name: "Employment Agreement", description: "Full-time employee offer letter and contract" },
-      { name: "Consulting Agreement", description: "Independent contractor services agreement" },
-      { name: "Vendor Contract", description: "Vendor services and payment terms" },
-    ].forEach((t, i) => {
-      this.templates.set(i + 1, {
-        id: i + 1, name: t.name, description: t.description, creatorId: 1,
-        fileName: `${t.name.toLowerCase().replace(/\s/g, '_')}.pdf`,
-        usageCount: [12, 8, 15, 4][i],
-        createdAt: new Date(Date.now() - (i + 1) * 7 * 24 * 60 * 60 * 1000),
-        updatedAt: new Date(Date.now() - i * 24 * 60 * 60 * 1000),
-      });
-    });
-
-    // Contacts
-    [
-      { name: "Sarah Johnson", email: "sarah@acme.com", organization: "Acme Corp" },
-      { name: "Michael Chen", email: "michael@techco.com", organization: "TechCo Inc" },
-      { name: "Emily Davis", email: "emily@startup.io", organization: "Startup.io" },
-      { name: "Robert Wilson", email: "robert@realty.com", organization: "Wilson Realty" },
-      { name: "Lisa Park", email: "lisa@law.com", organization: "Park Law Group" },
-    ].forEach((c, i) => {
-      this.contacts.set(i + 1, {
-        id: i + 1, userId: 1, name: c.name, email: c.email,
-        organization: c.organization, phone: null,
-        createdAt: new Date(Date.now() - (i + 2) * 5 * 24 * 60 * 60 * 1000),
-      });
-    });
-
-    // Team members
-    [
-      { name: "Alex Turner", email: "alex@draftsendSign.com", role: "admin", status: "active" },
-      { name: "Casey Morgan", email: "casey@draftsendSign.com", role: "member", status: "active" },
-      { name: "Jordan Lee", email: "jordan@draftsendSign.com", role: "viewer", status: "pending" },
-    ].forEach((m, i) => {
-      this.teamMembers.set(i + 1, {
-        id: i + 1, userId: 1, invitedEmail: m.email, invitedName: m.name,
-        role: m.role, status: m.status,
-        invitedAt: new Date(Date.now() - (i + 1) * 10 * 24 * 60 * 60 * 1000),
-        joinedAt: m.status === "active" ? new Date(Date.now() - (i + 1) * 9 * 24 * 60 * 60 * 1000) : null,
-      });
-    });
-
-    // Notifications
-    [
-      { type: "signed", title: "Document signed", message: "Sarah Johnson signed Software Development Agreement", documentId: 1 },
-      { type: "viewed", title: "Document viewed", message: "Michael Chen viewed NDA - Acme Corp", documentId: 2 },
-      { type: "completed", title: "Document completed", message: "Employment Contract has been fully executed", documentId: 3 },
-      { type: "reminder", title: "Reminder sent", message: "Automatic reminder sent to Robert Wilson", documentId: 4 },
-    ].forEach((n, i) => {
-      this.notifications.set(i + 1, {
-        id: i + 1, userId: 1, type: n.type, title: n.title, message: n.message,
-        documentId: n.documentId, read: i > 1,
-        createdAt: new Date(Date.now() - (i + 1) * 2 * 60 * 60 * 1000),
-      });
-    });
-
-    // Mass Signature Campaigns
-    [
-      { title: "Annual Gym Liability Waiver", description: "One-day guest pass liability waiver for all visitors.", documentName: "Gym Liability Waiver.pdf", status: "active" as const, signerCount: 47, token: "camp_gym_waiver_2026", daysAgo: 14 },
-      { title: "Photo Release Form", description: "Media release for event photography and marketing use.", documentName: "Photo Release.pdf", status: "active" as const, signerCount: 23, token: "camp_photo_release_2026", daysAgo: 7 },
-      { title: "Vendor Booth Agreement", description: "Terms and conditions for vendors at our summer market.", documentName: "Vendor Agreement.pdf", status: "closed" as const, signerCount: 12, token: "camp_vendor_booth_2025", daysAgo: 90 },
-    ].forEach((c, i) => {
-      const id = i + 1;
-      this.massCampaigns.set(id, {
-        id, userId: 1, title: c.title, description: c.description,
-        documentName: c.documentName, status: c.status, signerCount: c.signerCount,
-        publicToken: c.token,
-        createdAt: new Date(Date.now() - c.daysAgo * 24 * 60 * 60 * 1000),
-        updatedAt: new Date(Date.now() - Math.floor(c.daysAgo / 2) * 24 * 60 * 60 * 1000),
-      });
-    });
-
-    // Sample signers for campaign 1
-    [
-      "Marcus Williams", "Tanya Rodriguez", "Kevin Park", "Brianna Thomas",
-      "Derek Santos", "Aaliyah Jackson", "Connor Murphy", "Priya Patel",
-    ].forEach((name, i) => {
-      this.massSigners.set(i + 1, {
-        id: i + 1, campaignId: 1, fullName: name,
-        signedAt: new Date(Date.now() - (8 - i) * 24 * 60 * 60 * 1000),
-        ipAddress: `192.168.1.${100 + i}`,
-        signatureData: "",
-      });
-    });
-  }
+function toDocument(r: any): Document {
+  return {
+    id: r.id,
+    title: r.title,
+    status: r.status,
+    senderId: r.sender_id,
+    fileName: r.file_name,
+    fileSize: r.file_size,
+    filePath: r.file_path,
+    subject: r.subject,
+    message: r.message,
+    expiresAt: r.expires_at ? new Date(r.expires_at) : null,
+    sentAt: r.sent_at ? new Date(r.sent_at) : null,
+    completedAt: r.completed_at ? new Date(r.completed_at) : null,
+    createdAt: new Date(r.created_at),
+    updatedAt: new Date(r.updated_at),
+    templateId: r.template_id,
+    reminderFrequency: r.reminder_frequency,
+    tags: r.tags || [],
+  };
 }
 
-const store = new MockStore();
+function toRecipient(r: any): Recipient {
+  return {
+    id: r.id,
+    documentId: r.document_id,
+    name: r.name,
+    email: r.email,
+    role: r.role,
+    signingOrder: r.signing_order,
+    status: r.status,
+    authMethod: r.auth_method,
+    authPhone: r.auth_phone,
+    signedAt: r.signed_at ? new Date(r.signed_at) : null,
+    viewedAt: r.viewed_at ? new Date(r.viewed_at) : null,
+    signingToken: r.signing_token,
+    color: r.color,
+  };
+}
 
-function delay(ms = 80) { return new Promise(r => setTimeout(r, ms)); }
+function toField(r: any): DocumentField {
+  return {
+    id: r.id,
+    documentId: r.document_id,
+    recipientId: r.recipient_id,
+    type: r.type,
+    label: r.label,
+    required: r.required,
+    x: Number(r.x),
+    y: Number(r.y),
+    width: Number(r.width),
+    height: Number(r.height),
+    page: r.page,
+    value: r.value,
+  };
+}
 
-// Simulate HTTP-like API surface — returns parsed JSON data directly
+function toTemplate(r: any): Template {
+  return {
+    id: r.id,
+    name: r.name,
+    description: r.description,
+    creatorId: r.creator_id,
+    fileName: r.file_name,
+    filePath: r.file_path,
+    usageCount: r.usage_count,
+    createdAt: new Date(r.created_at),
+    updatedAt: new Date(r.updated_at),
+  };
+}
+
+function toContact(r: any): Contact {
+  return {
+    id: r.id,
+    userId: r.user_id,
+    name: r.name,
+    email: r.email,
+    organization: r.organization,
+    phone: r.phone,
+    createdAt: new Date(r.created_at),
+  };
+}
+
+function toTeamMember(r: any): TeamMember {
+  return {
+    id: r.id,
+    userId: r.user_id,
+    invitedEmail: r.invited_email,
+    invitedName: r.invited_name,
+    role: r.role,
+    status: r.status,
+    invitedAt: new Date(r.invited_at),
+    joinedAt: r.joined_at ? new Date(r.joined_at) : null,
+  };
+}
+
+function toAuditLog(r: any): AuditLog {
+  return {
+    id: r.id,
+    documentId: r.document_id,
+    userId: r.user_id,
+    recipientId: r.recipient_id,
+    action: r.action,
+    actorName: r.actor_name,
+    actorEmail: r.actor_email,
+    ipAddress: r.ip_address,
+    userAgent: r.user_agent,
+    metadata: r.metadata || {},
+    createdAt: new Date(r.created_at),
+  };
+}
+
+function toNotification(r: any): Notification {
+  return {
+    id: r.id,
+    userId: r.user_id,
+    type: r.type,
+    title: r.title,
+    message: r.message,
+    documentId: r.document_id,
+    read: r.read,
+    createdAt: new Date(r.created_at),
+  };
+}
+
+function toCampaign(r: any): MassCampaign {
+  return {
+    id: r.id,
+    userId: r.user_id,
+    title: r.title,
+    description: r.description,
+    documentName: r.document_name,
+    filePath: r.file_path,
+    status: r.status,
+    signerCount: r.signer_count,
+    publicToken: r.public_token,
+    createdAt: new Date(r.created_at),
+    updatedAt: new Date(r.updated_at),
+  };
+}
+
+function toSigner(r: any): MassSigner {
+  return {
+    id: r.id,
+    campaignId: r.campaign_id,
+    fullName: r.full_name,
+    signedAt: new Date(r.signed_at),
+    ipAddress: r.ip_address,
+    signatureData: r.signature_data,
+  };
+}
+
+function throwIfError(error: any, ctx: string) {
+  if (error) throw new Error(`${ctx}: ${error.message}`);
+}
+
+// ─── API ─────────────────────────────────────────────────────────────────────
+
 export const mockApi = {
 
   // AUTH
   async login(email: string, password: string) {
-    await delay();
-    const user = [...store.users.values()].find(u => u.email === email);
-    if (!user) throw new Error("401: Invalid credentials");
-    if (user.password !== password && password !== "demo") throw new Error("401: Invalid credentials");
-    const { password: _, ...safeUser } = user;
-    return { user: safeUser };
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw new Error("401: " + error.message);
+    const u = data.user!;
+    const meta = u.user_metadata || {};
+    const fullName: string = meta.full_name || email.split("@")[0];
+    const initials = fullName.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2);
+    return {
+      user: {
+        id: u.id,
+        fullName,
+        email: u.email || "",
+        company: meta.company || "",
+        role: "admin",
+        plan: "starter",
+        avatarInitials: initials,
+        twoFactorEnabled: false,
+        createdAt: new Date(u.created_at),
+      } as User,
+    };
   },
 
   async register(fullName: string, email: string, password: string, company: string) {
-    await delay();
-    const existing = [...store.users.values()].find(u => u.email === email);
-    if (existing) throw new Error("400: Email already in use");
-    const id = store.counters.users++;
-    const user: User = {
-      id, fullName, email, password, company, role: "admin", plan: "starter",
-      avatarInitials: fullName.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2),
-      twoFactorEnabled: false, createdAt: new Date(),
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: { full_name: fullName, company } },
+    });
+    if (error) throw new Error("400: " + error.message);
+    const u = data.user!;
+    const initials = fullName.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
+    await supabase.from("profiles").upsert({
+      id: u.id,
+      full_name: fullName,
+      email,
+      company,
+      role: "admin",
+      plan: "starter",
+      avatar_initials: initials,
+      two_factor_enabled: false,
+    });
+    return {
+      user: {
+        id: u.id,
+        fullName,
+        email,
+        company,
+        role: "admin",
+        plan: "starter",
+        avatarInitials: initials,
+        twoFactorEnabled: false,
+        createdAt: new Date(u.created_at),
+      } as User,
     };
-    store.users.set(id, user);
-    const { password: _, ...safeUser } = user;
-    return { user: safeUser };
   },
 
   // USERS
-  async getUser(id: number) {
-    await delay();
-    const user = store.users.get(id);
-    if (!user) throw new Error("404: User not found");
-    const { password: _, ...safeUser } = user;
-    return safeUser;
+  async getUser(id: string) {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", id)
+      .single();
+    throwIfError(error, "404");
+    return {
+      id: data.id,
+      fullName: data.full_name,
+      email: data.email,
+      company: data.company,
+      role: data.role,
+      plan: data.plan,
+      avatarInitials: data.avatar_initials,
+      twoFactorEnabled: data.two_factor_enabled,
+      createdAt: new Date(data.created_at),
+    } as User;
   },
 
-  async updateUser(id: number, data: Partial<User>) {
-    await delay();
-    const user = store.users.get(id);
-    if (!user) throw new Error("404: User not found");
-    const updated = { ...user, ...data };
-    store.users.set(id, updated);
-    const { password: _, ...safeUser } = updated;
-    return safeUser;
+  async updateUser(id: string, data: Partial<User>) {
+    const update: any = {};
+    if (data.fullName !== undefined) update.full_name = data.fullName;
+    if (data.email !== undefined) update.email = data.email;
+    if (data.company !== undefined) update.company = data.company;
+    if (data.role !== undefined) update.role = data.role;
+    if (data.plan !== undefined) update.plan = data.plan;
+    if (data.avatarInitials !== undefined) update.avatar_initials = data.avatarInitials;
+    if (data.twoFactorEnabled !== undefined) update.two_factor_enabled = data.twoFactorEnabled;
+
+    const { data: row, error } = await supabase
+      .from("profiles")
+      .update(update)
+      .eq("id", id)
+      .select()
+      .single();
+    throwIfError(error, "404");
+    return {
+      id: row.id,
+      fullName: row.full_name,
+      email: row.email,
+      company: row.company,
+      role: row.role,
+      plan: row.plan,
+      avatarInitials: row.avatar_initials,
+      twoFactorEnabled: row.two_factor_enabled,
+      createdAt: new Date(row.created_at),
+    } as User;
   },
 
   // DOCUMENTS
-  async getDocuments(userId: number) {
-    await delay();
-    return [...store.documents.values()]
-      .filter(d => d.senderId === userId)
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  async getDocuments(userId: string) {
+    const { data, error } = await supabase
+      .from("documents")
+      .select("*")
+      .eq("sender_id", userId)
+      .order("created_at", { ascending: false });
+    throwIfError(error, "getDocuments");
+    return (data || []).map(toDocument);
   },
 
   async getDocument(id: number) {
-    await delay();
-    const doc = store.documents.get(id);
-    if (!doc) throw new Error("404: Document not found");
-    return doc;
+    const { data, error } = await supabase
+      .from("documents")
+      .select("*")
+      .eq("id", id)
+      .single();
+    throwIfError(error, "404");
+    return toDocument(data);
   },
 
   async createDocument(data: Partial<Document>) {
-    await delay();
-    const id = store.counters.documents++;
-    const now = new Date();
-    const doc: Document = {
-      id, title: data.title || "Untitled Document", status: data.status || "draft",
-      senderId: data.senderId || 1, fileName: data.fileName || "document.pdf",
-      fileSize: data.fileSize || "0KB", subject: data.subject || "",
-      message: data.message || "", expiresAt: data.expiresAt || null,
-      sentAt: data.sentAt || null, completedAt: null, createdAt: now, updatedAt: now,
-      templateId: data.templateId || null, reminderFrequency: data.reminderFrequency || "3days",
+    const row: any = {
+      title: data.title || "Untitled Document",
+      status: data.status || "draft",
+      sender_id: String(data.senderId || ""),
+      file_name: data.fileName || "document.pdf",
+      file_size: data.fileSize || "0KB",
+      file_path: data.filePath || null,
+      subject: data.subject || "",
+      message: data.message || "",
+      expires_at: data.expiresAt || null,
+      sent_at: data.sentAt || null,
+      completed_at: null,
+      template_id: data.templateId || null,
+      reminder_frequency: data.reminderFrequency || "3days",
       tags: data.tags || [],
     };
-    store.documents.set(id, doc);
-    store.auditLogs.set(store.counters.audit++, {
-      id: store.counters.audit - 1, documentId: id, userId: 1, recipientId: null,
-      action: "document_created", actorName: "Mason Palmieri", actorEmail: "help@draftsendsign.com",
-      ipAddress: "127.0.0.1", userAgent: navigator.userAgent, metadata: {}, createdAt: now,
-    });
+    const { data: created, error } = await supabase
+      .from("documents")
+      .insert(row)
+      .select()
+      .single();
+    throwIfError(error, "createDocument");
+    const doc = toDocument(created);
+    // Audit log (best-effort)
+    supabase.from("audit_logs").insert({
+      document_id: doc.id,
+      user_id: data.senderId || null,
+      action: "document_created",
+      actor_name: "",
+      actor_email: "",
+      ip_address: "",
+      user_agent: typeof navigator !== "undefined" ? navigator.userAgent : "",
+      metadata: {},
+    }).then(() => {});
     return doc;
   },
 
   async updateDocument(id: number, data: Partial<Document>) {
-    await delay();
-    const doc = store.documents.get(id);
-    if (!doc) throw new Error("404: Document not found");
-    const updated = { ...doc, ...data, updatedAt: new Date() };
-    store.documents.set(id, updated);
-    return updated;
+    const update: any = { updated_at: new Date().toISOString() };
+    if (data.title !== undefined) update.title = data.title;
+    if (data.status !== undefined) update.status = data.status;
+    if (data.fileName !== undefined) update.file_name = data.fileName;
+    if (data.fileSize !== undefined) update.file_size = data.fileSize;
+    if (data.filePath !== undefined) update.file_path = data.filePath;
+    if (data.subject !== undefined) update.subject = data.subject;
+    if (data.message !== undefined) update.message = data.message;
+    if (data.expiresAt !== undefined) update.expires_at = data.expiresAt;
+    if (data.sentAt !== undefined) update.sent_at = data.sentAt;
+    if (data.completedAt !== undefined) update.completed_at = data.completedAt;
+    if (data.templateId !== undefined) update.template_id = data.templateId;
+    if (data.reminderFrequency !== undefined) update.reminder_frequency = data.reminderFrequency;
+    if (data.tags !== undefined) update.tags = data.tags;
+
+    const { data: updated, error } = await supabase
+      .from("documents")
+      .update(update)
+      .eq("id", id)
+      .select()
+      .single();
+    throwIfError(error, "404");
+    return toDocument(updated);
   },
 
   async deleteDocument(id: number) {
-    await delay();
-    store.documents.delete(id);
+    const { error } = await supabase.from("documents").delete().eq("id", id);
+    throwIfError(error, "deleteDocument");
     return { success: true };
   },
 
   async sendDocument(id: number) {
-    await delay();
-    const doc = store.documents.get(id);
-    if (!doc) throw new Error("404: Document not found");
-    const updated = { ...doc, status: "pending", sentAt: new Date(), updatedAt: new Date() };
-    store.documents.set(id, updated);
-    return updated;
+    const { data, error } = await supabase
+      .from("documents")
+      .update({ status: "pending", sent_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+      .eq("id", id)
+      .select()
+      .single();
+    throwIfError(error, "404");
+    return toDocument(data);
   },
 
   async voidDocument(id: number) {
-    await delay();
-    const doc = store.documents.get(id);
-    if (!doc) throw new Error("404: Document not found");
-    const updated = { ...doc, status: "voided", updatedAt: new Date() };
-    store.documents.set(id, updated);
-    return updated;
+    const { data, error } = await supabase
+      .from("documents")
+      .update({ status: "voided", updated_at: new Date().toISOString() })
+      .eq("id", id)
+      .select()
+      .single();
+    throwIfError(error, "404");
+    return toDocument(data);
   },
 
   // RECIPIENTS
   async getRecipients(documentId: number) {
-    await delay();
-    return [...store.recipients.values()].filter(r => r.documentId === documentId);
+    const { data, error } = await supabase
+      .from("recipients")
+      .select("*")
+      .eq("document_id", documentId)
+      .order("signing_order", { ascending: true });
+    throwIfError(error, "getRecipients");
+    return (data || []).map(toRecipient);
   },
 
   async createRecipient(data: Partial<Recipient>) {
-    await delay();
-    const id = store.counters.recipients++;
-    const r: Recipient = {
-      id, documentId: data.documentId!, name: data.name || "", email: data.email || "",
-      role: data.role || "signer", signingOrder: data.signingOrder || 1,
-      status: "pending", authMethod: data.authMethod || "none", authPhone: null,
-      signedAt: null, viewedAt: null,
-      signingToken: `token_${id}_${Date.now()}`, color: data.color || "#3b82f6",
-    };
-    store.recipients.set(id, r);
-    return r;
+    const { data: created, error } = await supabase
+      .from("recipients")
+      .insert({
+        document_id: data.documentId,
+        name: data.name || "",
+        email: data.email || "",
+        role: data.role || "signer",
+        signing_order: data.signingOrder || 1,
+        status: "pending",
+        auth_method: data.authMethod || "none",
+        auth_phone: data.authPhone || null,
+        color: data.color || "#3b82f6",
+      })
+      .select()
+      .single();
+    throwIfError(error, "createRecipient");
+    return toRecipient(created);
   },
 
   async updateRecipient(id: number, data: Partial<Recipient>) {
-    await delay();
-    const r = store.recipients.get(id);
-    if (!r) throw new Error("404: Recipient not found");
-    const updated = { ...r, ...data };
-    store.recipients.set(id, updated);
-    return updated;
+    const update: any = {};
+    if (data.name !== undefined) update.name = data.name;
+    if (data.email !== undefined) update.email = data.email;
+    if (data.role !== undefined) update.role = data.role;
+    if (data.signingOrder !== undefined) update.signing_order = data.signingOrder;
+    if (data.status !== undefined) update.status = data.status;
+    if (data.authMethod !== undefined) update.auth_method = data.authMethod;
+    if (data.authPhone !== undefined) update.auth_phone = data.authPhone;
+    if (data.signedAt !== undefined) update.signed_at = data.signedAt;
+    if (data.viewedAt !== undefined) update.viewed_at = data.viewedAt;
+    if (data.color !== undefined) update.color = data.color;
+
+    const { data: updated, error } = await supabase
+      .from("recipients")
+      .update(update)
+      .eq("id", id)
+      .select()
+      .single();
+    throwIfError(error, "404");
+    return toRecipient(updated);
   },
 
   // FIELDS
   async getFields(documentId: number) {
-    await delay();
-    return [...store.fields.values()].filter(f => f.documentId === documentId);
+    const { data, error } = await supabase
+      .from("document_fields")
+      .select("*")
+      .eq("document_id", documentId);
+    throwIfError(error, "getFields");
+    return (data || []).map(toField);
   },
 
   async createField(data: Partial<DocumentField>) {
-    await delay();
-    const id = store.counters.fields++;
-    const f: DocumentField = {
-      id, documentId: data.documentId!, recipientId: data.recipientId || null,
-      type: data.type || "signature", label: data.label || "Signature",
-      required: data.required ?? true,
-      x: data.x || 0, y: data.y || 0, width: data.width || 200, height: data.height || 50,
-      page: data.page || 1, value: null,
-    };
-    store.fields.set(id, f);
-    return f;
+    const { data: created, error } = await supabase
+      .from("document_fields")
+      .insert({
+        document_id: data.documentId,
+        recipient_id: data.recipientId || null,
+        type: data.type || "signature",
+        label: data.label || "Signature",
+        required: data.required ?? true,
+        x: data.x || 0,
+        y: data.y || 0,
+        width: data.width || 200,
+        height: data.height || 50,
+        page: data.page || 1,
+        value: null,
+      })
+      .select()
+      .single();
+    throwIfError(error, "createField");
+    return toField(created);
   },
 
   async updateField(id: number, data: Partial<DocumentField>) {
-    await delay();
-    const f = store.fields.get(id);
-    if (!f) throw new Error("404: Field not found");
-    const updated = { ...f, ...data };
-    store.fields.set(id, updated);
-    return updated;
+    const update: any = {};
+    if (data.type !== undefined) update.type = data.type;
+    if (data.label !== undefined) update.label = data.label;
+    if (data.required !== undefined) update.required = data.required;
+    if (data.x !== undefined) update.x = data.x;
+    if (data.y !== undefined) update.y = data.y;
+    if (data.width !== undefined) update.width = data.width;
+    if (data.height !== undefined) update.height = data.height;
+    if (data.page !== undefined) update.page = data.page;
+    if (data.value !== undefined) update.value = data.value;
+    if (data.recipientId !== undefined) update.recipient_id = data.recipientId;
+
+    const { data: updated, error } = await supabase
+      .from("document_fields")
+      .update(update)
+      .eq("id", id)
+      .select()
+      .single();
+    throwIfError(error, "404");
+    return toField(updated);
   },
 
   async deleteField(id: number) {
-    await delay();
-    store.fields.delete(id);
+    const { error } = await supabase.from("document_fields").delete().eq("id", id);
+    throwIfError(error, "deleteField");
     return { success: true };
   },
 
   async deleteFieldsByDocument(documentId: number) {
-    await delay();
-    [...store.fields.entries()].forEach(([id, f]) => {
-      if (f.documentId === documentId) store.fields.delete(id);
-    });
+    const { error } = await supabase
+      .from("document_fields")
+      .delete()
+      .eq("document_id", documentId);
+    throwIfError(error, "deleteFieldsByDocument");
     return { success: true };
   },
 
   // TEMPLATES
-  async getTemplates(userId: number) {
-    await delay();
-    return [...store.templates.values()].filter(t => t.creatorId === userId);
+  async getTemplates(userId: string) {
+    const { data, error } = await supabase
+      .from("templates")
+      .select("*")
+      .eq("creator_id", userId)
+      .order("created_at", { ascending: false });
+    throwIfError(error, "getTemplates");
+    return (data || []).map(toTemplate);
   },
 
   async getTemplate(id: number) {
-    await delay();
-    const t = store.templates.get(id);
-    if (!t) throw new Error("404: Template not found");
-    return t;
+    const { data, error } = await supabase
+      .from("templates")
+      .select("*")
+      .eq("id", id)
+      .single();
+    throwIfError(error, "404");
+    return toTemplate(data);
   },
 
   async createTemplate(data: Partial<Template>) {
-    await delay();
-    const id = store.counters.templates++;
-    const now = new Date();
-    const t: Template = {
-      id, name: data.name || "Untitled Template", description: data.description || "",
-      creatorId: data.creatorId || 1, fileName: data.fileName || "template.pdf",
-      usageCount: 0, createdAt: now, updatedAt: now,
-    };
-    store.templates.set(id, t);
-    return t;
+    const { data: created, error } = await supabase
+      .from("templates")
+      .insert({
+        name: data.name || "Untitled Template",
+        description: data.description || "",
+        creator_id: data.creatorId,
+        file_name: data.fileName || "template.pdf",
+        file_path: data.filePath || null,
+        usage_count: 0,
+      })
+      .select()
+      .single();
+    throwIfError(error, "createTemplate");
+    return toTemplate(created);
   },
 
   async updateTemplate(id: number, data: Partial<Template>) {
-    await delay();
-    const t = store.templates.get(id);
-    if (!t) throw new Error("404: Template not found");
-    const updated = { ...t, ...data, updatedAt: new Date() };
-    store.templates.set(id, updated);
-    return updated;
+    const update: any = { updated_at: new Date().toISOString() };
+    if (data.name !== undefined) update.name = data.name;
+    if (data.description !== undefined) update.description = data.description;
+    if (data.fileName !== undefined) update.file_name = data.fileName;
+    if (data.filePath !== undefined) update.file_path = data.filePath;
+    if (data.usageCount !== undefined) update.usage_count = data.usageCount;
+
+    const { data: updated, error } = await supabase
+      .from("templates")
+      .update(update)
+      .eq("id", id)
+      .select()
+      .single();
+    throwIfError(error, "404");
+    return toTemplate(updated);
   },
 
   async deleteTemplate(id: number) {
-    await delay();
-    store.templates.delete(id);
+    const { error } = await supabase.from("templates").delete().eq("id", id);
+    throwIfError(error, "deleteTemplate");
     return { success: true };
   },
 
   // CONTACTS
-  async getContacts(userId: number) {
-    await delay();
-    return [...store.contacts.values()].filter(c => c.userId === userId);
+  async getContacts(userId: string) {
+    const { data, error } = await supabase
+      .from("contacts")
+      .select("*")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false });
+    throwIfError(error, "getContacts");
+    return (data || []).map(toContact);
   },
 
   async createContact(data: Partial<Contact>) {
-    await delay();
-    const id = store.counters.contacts++;
-    const c: Contact = {
-      id, userId: data.userId || 1, name: data.name || "", email: data.email || "",
-      organization: data.organization || "", phone: data.phone || null, createdAt: new Date(),
-    };
-    store.contacts.set(id, c);
-    return c;
+    const { data: created, error } = await supabase
+      .from("contacts")
+      .insert({
+        user_id: data.userId,
+        name: data.name || "",
+        email: data.email || "",
+        organization: data.organization || "",
+        phone: data.phone || null,
+      })
+      .select()
+      .single();
+    throwIfError(error, "createContact");
+    return toContact(created);
   },
 
   async updateContact(id: number, data: Partial<Contact>) {
-    await delay();
-    const c = store.contacts.get(id);
-    if (!c) throw new Error("404: Contact not found");
-    const updated = { ...c, ...data };
-    store.contacts.set(id, updated);
-    return updated;
+    const update: any = {};
+    if (data.name !== undefined) update.name = data.name;
+    if (data.email !== undefined) update.email = data.email;
+    if (data.organization !== undefined) update.organization = data.organization;
+    if (data.phone !== undefined) update.phone = data.phone;
+
+    const { data: updated, error } = await supabase
+      .from("contacts")
+      .update(update)
+      .eq("id", id)
+      .select()
+      .single();
+    throwIfError(error, "404");
+    return toContact(updated);
   },
 
   async deleteContact(id: number) {
-    await delay();
-    store.contacts.delete(id);
+    const { error } = await supabase.from("contacts").delete().eq("id", id);
+    throwIfError(error, "deleteContact");
     return { success: true };
   },
 
   // TEAM
-  async getTeam(userId: number) {
-    await delay();
-    return [...store.teamMembers.values()].filter(m => m.userId === userId);
+  async getTeam(userId: string) {
+    const { data, error } = await supabase
+      .from("team_members")
+      .select("*")
+      .eq("user_id", userId)
+      .order("invited_at", { ascending: false });
+    throwIfError(error, "getTeam");
+    return (data || []).map(toTeamMember);
   },
 
   async createTeamMember(data: Partial<TeamMember>) {
-    await delay();
-    const id = store.counters.team++;
-    const m: TeamMember = {
-      id, userId: data.userId || 1, invitedEmail: data.invitedEmail || "",
-      invitedName: data.invitedName || "", role: data.role || "member",
-      status: "pending", invitedAt: new Date(), joinedAt: null,
-    };
-    store.teamMembers.set(id, m);
-    return m;
+    const { data: created, error } = await supabase
+      .from("team_members")
+      .insert({
+        user_id: data.userId,
+        invited_email: data.invitedEmail || "",
+        invited_name: data.invitedName || "",
+        role: data.role || "member",
+        status: "pending",
+      })
+      .select()
+      .single();
+    throwIfError(error, "createTeamMember");
+    return toTeamMember(created);
   },
 
   async updateTeamMember(id: number, data: Partial<TeamMember>) {
-    await delay();
-    const m = store.teamMembers.get(id);
-    if (!m) throw new Error("404: Team member not found");
-    const updated = { ...m, ...data };
-    store.teamMembers.set(id, updated);
-    return updated;
+    const update: any = {};
+    if (data.role !== undefined) update.role = data.role;
+    if (data.status !== undefined) update.status = data.status;
+    if (data.joinedAt !== undefined) update.joined_at = data.joinedAt;
+
+    const { data: updated, error } = await supabase
+      .from("team_members")
+      .update(update)
+      .eq("id", id)
+      .select()
+      .single();
+    throwIfError(error, "404");
+    return toTeamMember(updated);
   },
 
   async deleteTeamMember(id: number) {
-    await delay();
-    store.teamMembers.delete(id);
+    const { error } = await supabase.from("team_members").delete().eq("id", id);
+    throwIfError(error, "deleteTeamMember");
     return { success: true };
   },
 
   // AUDIT LOGS
   async getAuditLogsByDocument(documentId: number) {
-    await delay();
-    return [...store.auditLogs.values()]
-      .filter(l => l.documentId === documentId)
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    const { data, error } = await supabase
+      .from("audit_logs")
+      .select("*")
+      .eq("document_id", documentId)
+      .order("created_at", { ascending: false });
+    throwIfError(error, "getAuditLogsByDocument");
+    return (data || []).map(toAuditLog);
   },
 
-  async getAuditLogsByUser(userId: number) {
-    await delay();
-    return [...store.auditLogs.values()]
-      .filter(l => l.userId === userId)
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  async getAuditLogsByUser(userId: string) {
+    const { data, error } = await supabase
+      .from("audit_logs")
+      .select("*")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false });
+    throwIfError(error, "getAuditLogsByUser");
+    return (data || []).map(toAuditLog);
   },
 
   // NOTIFICATIONS
-  async getNotifications(userId: number) {
-    await delay();
-    return [...store.notifications.values()]
-      .filter(n => n.userId === userId)
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  async getNotifications(userId: string) {
+    const { data, error } = await supabase
+      .from("notifications")
+      .select("*")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false });
+    throwIfError(error, "getNotifications");
+    return (data || []).map(toNotification);
   },
 
   async markNotificationRead(id: number) {
-    await delay();
-    const n = store.notifications.get(id);
-    if (n) store.notifications.set(id, { ...n, read: true });
+    const { error } = await supabase
+      .from("notifications")
+      .update({ read: true })
+      .eq("id", id);
+    throwIfError(error, "markNotificationRead");
     return { success: true };
   },
 
-  async markAllNotificationsRead(userId: number) {
-    await delay();
-    [...store.notifications.entries()].forEach(([id, n]) => {
-      if (n.userId === userId) store.notifications.set(id, { ...n, read: true });
-    });
+  async markAllNotificationsRead(userId: string) {
+    const { error } = await supabase
+      .from("notifications")
+      .update({ read: true })
+      .eq("user_id", userId);
+    throwIfError(error, "markAllNotificationsRead");
     return { success: true };
   },
 
   // STATS (dashboard)
-  async getStats(userId: number) {
-    await delay();
-    const docs = [...store.documents.values()].filter(d => d.senderId === userId);
+  async getStats(userId: string) {
+    const { data, error } = await supabase
+      .from("documents")
+      .select("status")
+      .eq("sender_id", userId);
+    throwIfError(error, "getStats");
+    const docs = data || [];
     return {
       total: docs.length,
       completed: docs.filter(d => d.status === "completed").length,
@@ -567,118 +874,205 @@ export const mockApi = {
     };
   },
 
-  // SIGNER (public — no auth)
+  // SIGNER (public — no auth required)
   async getSignerInfo(token: string) {
-    await delay();
-    const recipient = [...store.recipients.values()].find(r => r.signingToken === token);
-    if (!recipient) throw new Error("404: Invalid signing token");
-    const doc = store.documents.get(recipient.documentId);
-    if (!doc) throw new Error("404: Document not found");
-    const fields = [...store.fields.values()].filter(f => f.documentId === doc.id);
-    return { recipient, document: doc, fields };
+    const { data: recipient, error: rErr } = await supabase
+      .from("recipients")
+      .select("*")
+      .eq("signing_token", token)
+      .single();
+    if (rErr) throw new Error("404: Invalid signing token");
+
+    const { data: doc, error: dErr } = await supabase
+      .from("documents")
+      .select("*")
+      .eq("id", recipient.document_id)
+      .single();
+    if (dErr) throw new Error("404: Document not found");
+
+    const { data: fields } = await supabase
+      .from("document_fields")
+      .select("*")
+      .eq("document_id", doc.id);
+
+    return {
+      recipient: toRecipient(recipient),
+      document: toDocument(doc),
+      fields: (fields || []).map(toField),
+    };
   },
 
   async submitSignature(token: string, fields: Record<number, string>) {
-    await delay();
-    const recipient = [...store.recipients.values()].find(r => r.signingToken === token);
-    if (!recipient) throw new Error("404: Invalid signing token");
-    const updated = { ...recipient, status: "signed", signedAt: new Date() };
-    store.recipients.set(recipient.id, updated);
+    const { data: recipient, error: rErr } = await supabase
+      .from("recipients")
+      .select("*")
+      .eq("signing_token", token)
+      .single();
+    if (rErr) throw new Error("404: Invalid signing token");
+
+    // Update recipient status
+    await supabase
+      .from("recipients")
+      .update({ status: "signed", signed_at: new Date().toISOString() })
+      .eq("id", recipient.id);
+
     // Update field values
-    Object.entries(fields).forEach(([fieldId, value]) => {
-      const f = store.fields.get(parseInt(fieldId));
-      if (f) store.fields.set(parseInt(fieldId), { ...f, value });
-    });
-    // Check if all recipients signed
-    const allRecipients = [...store.recipients.values()].filter(r => r.documentId === recipient.documentId);
-    const allSigned = allRecipients.every(r => r.status === "signed");
-    if (allSigned) {
-      const doc = store.documents.get(recipient.documentId);
-      if (doc) {
-        store.documents.set(doc.id, { ...doc, status: "completed", completedAt: new Date() });
-        // Send completion notification to the document sender
-        const sender = store.users.get(doc.senderId);
-        if (sender) {
-          sendCompletionEmail({
-            senderName: sender.fullName,
-            senderEmail: sender.email,
-            documentTitle: doc.title,
-            recipientCount: allRecipients.length,
-          }).catch(() => {}); // Non-blocking, non-critical
-        }
-      }
+    for (const [fieldId, value] of Object.entries(fields)) {
+      await supabase
+        .from("document_fields")
+        .update({ value })
+        .eq("id", parseInt(fieldId));
     }
+
+    // Check if all recipients signed
+    const { data: allRecipients } = await supabase
+      .from("recipients")
+      .select("status")
+      .eq("document_id", recipient.document_id);
+
+    const allSigned = (allRecipients || []).every(r => r.status === "signed");
+    if (allSigned) {
+      await supabase
+        .from("documents")
+        .update({ status: "completed", completed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+        .eq("id", recipient.document_id);
+
+      // Send completion email (non-blocking)
+      supabase
+        .from("documents")
+        .select("title, sender_id")
+        .eq("id", recipient.document_id)
+        .single()
+        .then(({ data: doc }) => {
+          if (doc) {
+            supabase
+              .from("profiles")
+              .select("full_name, email")
+              .eq("id", doc.sender_id)
+              .single()
+              .then(({ data: profile }) => {
+                if (profile) {
+                  sendCompletionEmail({
+                    senderName: profile.full_name,
+                    senderEmail: profile.email,
+                    documentTitle: doc.title,
+                    recipientCount: (allRecipients || []).length,
+                  }).catch(() => {});
+                }
+              });
+          }
+        });
+    }
+
     return { success: true };
   },
 
   // MASS SIGNATURE
-  async getMassCampaigns(userId: number) {
-    await delay();
-    return [...store.massCampaigns.values()].filter(c => c.userId === userId)
-      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  async getMassCampaigns(userId: string) {
+    const { data, error } = await supabase
+      .from("mass_campaigns")
+      .select("*")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false });
+    throwIfError(error, "getMassCampaigns");
+    return (data || []).map(toCampaign);
   },
 
   async getMassCampaign(id: number) {
-    await delay();
-    const campaign = store.massCampaigns.get(id);
-    if (!campaign) throw new Error("404: Campaign not found");
-    return campaign;
+    const { data, error } = await supabase
+      .from("mass_campaigns")
+      .select("*")
+      .eq("id", id)
+      .single();
+    throwIfError(error, "404");
+    return toCampaign(data);
   },
 
   async getMassCampaignByToken(token: string) {
-    await delay();
-    const campaign = [...store.massCampaigns.values()].find(c => c.publicToken === token);
-    if (!campaign) throw new Error("404: Campaign not found");
-    return campaign;
+    const { data, error } = await supabase
+      .from("mass_campaigns")
+      .select("*")
+      .eq("public_token", token)
+      .single();
+    throwIfError(error, "404");
+    return toCampaign(data);
   },
 
-  async createMassCampaign(userId: number, data: { title: string; description: string; documentName: string }) {
-    await delay();
-    const id = store.counters.campaigns++;
-    const token = `camp_${data.title.toLowerCase().replace(/[^a-z0-9]/g, "_").slice(0, 20)}_${Date.now()}`;
-    const campaign: MassCampaign = {
-      id, userId, title: data.title, description: data.description,
-      documentName: data.documentName, status: "active", signerCount: 0,
-      publicToken: token, createdAt: new Date(), updatedAt: new Date(),
-    };
-    store.massCampaigns.set(id, campaign);
-    return campaign;
+  async createMassCampaign(userId: string | number, data: { title: string; description: string; documentName: string }) {
+    const { data: created, error } = await supabase
+      .from("mass_campaigns")
+      .insert({
+        user_id: String(userId),
+        title: data.title,
+        description: data.description,
+        document_name: data.documentName,
+        status: "active",
+        signer_count: 0,
+      })
+      .select()
+      .single();
+    throwIfError(error, "createMassCampaign");
+    return toCampaign(created);
   },
 
   async updateMassCampaignStatus(id: number, status: MassCampaign["status"]) {
-    await delay();
-    const campaign = store.massCampaigns.get(id);
-    if (!campaign) throw new Error("404: Campaign not found");
-    store.massCampaigns.set(id, { ...campaign, status, updatedAt: new Date() });
-    return store.massCampaigns.get(id)!;
+    const { data, error } = await supabase
+      .from("mass_campaigns")
+      .update({ status, updated_at: new Date().toISOString() })
+      .eq("id", id)
+      .select()
+      .single();
+    throwIfError(error, "404");
+    return toCampaign(data);
   },
 
   async deleteMassCampaign(id: number) {
-    await delay();
-    store.massCampaigns.delete(id);
+    const { error } = await supabase.from("mass_campaigns").delete().eq("id", id);
+    throwIfError(error, "deleteMassCampaign");
     return { success: true };
   },
 
   async getMassSigners(campaignId: number) {
-    await delay();
-    return [...store.massSigners.values()]
-      .filter(s => s.campaignId === campaignId)
-      .sort((a, b) => b.signedAt.getTime() - a.signedAt.getTime());
+    const { data, error } = await supabase
+      .from("mass_signers")
+      .select("*")
+      .eq("campaign_id", campaignId)
+      .order("signed_at", { ascending: false });
+    throwIfError(error, "getMassSigners");
+    return (data || []).map(toSigner);
   },
 
   async submitMassSignature(token: string, fullName: string, signatureData: string) {
-    await delay();
-    const campaign = [...store.massCampaigns.values()].find(c => c.publicToken === token);
-    if (!campaign) throw new Error("404: Campaign not found");
+    // Get campaign (public read — no auth required)
+    const { data: campaign, error: cErr } = await supabase
+      .from("mass_campaigns")
+      .select("*")
+      .eq("public_token", token)
+      .single();
+    if (cErr) throw new Error("404: Campaign not found");
     if (campaign.status !== "active") throw new Error("400: Campaign is not accepting signatures");
-    const id = store.counters.signers++;
-    const signer: MassSigner = {
-      id, campaignId: campaign.id, fullName,
-      signedAt: new Date(), ipAddress: "127.0.0.1", signatureData,
-    };
-    store.massSigners.set(id, signer);
-    // Increment counter on campaign
-    store.massCampaigns.set(campaign.id, { ...campaign, signerCount: campaign.signerCount + 1, updatedAt: new Date() });
-    return { success: true, signer };
+
+    const { data: signer, error: sErr } = await supabase
+      .from("mass_signers")
+      .insert({
+        campaign_id: campaign.id,
+        full_name: fullName,
+        ip_address: "0.0.0.0",
+        signature_data: signatureData,
+      })
+      .select()
+      .single();
+    throwIfError(sErr, "submitMassSignature");
+
+    // Increment signer count
+    await supabase
+      .from("mass_campaigns")
+      .update({
+        signer_count: campaign.signer_count + 1,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", campaign.id);
+
+    return { success: true, signer: toSigner(signer) };
   },
 };

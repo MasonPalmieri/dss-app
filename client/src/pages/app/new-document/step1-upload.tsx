@@ -19,15 +19,17 @@ interface Props {
 
 export default function Step1Upload({ file, setFile, onNext }: Props) {
   const processFile = useCallback(async (f: File) => {
-    // Get real page count from PDF
-    let pages = Math.max(1, Math.ceil(f.size / 50000));
+    let pages = 1;
     try {
       const pdfjsLib = await import('pdfjs-dist');
-      pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+      const workerUrl = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).href;
+      pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
       const buf = await f.arrayBuffer();
       const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
       pages = pdf.numPages;
-    } catch {}
+    } catch (err) {
+      console.error('PDF page count error:', err);
+    }
     setFile({ name: f.name, size: `${(f.size / 1024).toFixed(1)} KB`, pages, fileObject: f });
   }, [setFile]);
 

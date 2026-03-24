@@ -163,25 +163,33 @@ function DocumentPage({
   const [hoveredField, setHoveredField] = useState<string | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
 
+  const [renderError, setRenderError] = useState(false);
+
   useEffect(() => {
-    if (!fileObject) { setPdfUrl(null); return; }
+    if (!fileObject) { setPdfUrl(null); setRenderError(false); return; }
     let cancelled = false;
     setLoading(true);
+    setRenderError(false);
+    setPdfUrl(null);
     (async () => {
       try {
         const pdfjsLib = await import('pdfjs-dist');
-        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+        const workerUrl = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).href;
+        pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
         const buf = await fileObject.arrayBuffer();
         const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
         const page = await pdf.getPage(pageNum);
-        const viewport = page.getViewport({ scale: 2.0 });
+        const viewport = page.getViewport({ scale: 1.5 });
         const canvas = document.createElement('canvas');
         canvas.width = viewport.width;
         canvas.height = viewport.height;
         const ctx = canvas.getContext('2d')!;
         await page.render({ canvasContext: ctx, viewport }).promise;
-        if (!cancelled) setPdfUrl(canvas.toDataURL());
-      } catch { if (!cancelled) setPdfUrl(null); }
+        if (!cancelled) setPdfUrl(canvas.toDataURL('image/jpeg', 0.92));
+      } catch (err) {
+        console.error('PDF render error:', err);
+        if (!cancelled) setRenderError(true);
+      }
       if (!cancelled) setLoading(false);
     })();
     return () => { cancelled = true; };
@@ -259,18 +267,30 @@ function DocumentPage({
         onMouseLeave={handleMouseUp}
         data-testid={`document-canvas-p${pageNum}`}
       >
-        {/* PDF render or demo text */}
+        {/* Loading spinner */}
         {loading && (
           <div className="absolute inset-0 flex items-center justify-center bg-white z-10 pointer-events-none">
             <div className="flex flex-col items-center gap-2">
-              <div className="h-5 w-5 border-2 border-[#c8210d] border-t-transparent rounded-full animate-spin" />
-              <span className="text-xs text-muted-foreground">Loading page {pageNum}…</span>
+              <div className="h-6 w-6 border-2 border-[#c8210d] border-t-transparent rounded-full animate-spin" />
+              <span className="text-xs text-muted-foreground">Rendering page {pageNum}…</span>
             </div>
           </div>
         )}
-        {pdfUrl && !loading ? (
-          <img src={pdfUrl} alt={`Page ${pageNum}`} className="w-full h-auto pointer-events-none" />
-        ) : !loading && (
+
+        {/* Real PDF render */}
+        {pdfUrl && !loading && (
+          <img src={pdfUrl} alt={`Page ${pageNum}`} className="w-full h-auto pointer-events-none block" />
+        )}
+
+        {/* Render error state (real file uploaded but render failed) */}
+        {fileObject && !loading && renderError && (
+          <div className="absolute inset-0 flex items-center justify-center bg-white pointer-events-none">
+            <p className="text-xs text-muted-foreground">Could not render page {pageNum}</p>
+          </div>
+        )}
+
+        {/* Demo text — only shown when NO real file is uploaded */}
+        {!fileObject && !loading && (
           <div className="absolute inset-0 p-10 pointer-events-none overflow-hidden">
             {demoLines.map((line, i) => (
               <div key={i} style={{
