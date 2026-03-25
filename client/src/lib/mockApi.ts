@@ -902,7 +902,7 @@ export const mockApi = {
     };
   },
 
-  async submitSignature(token: string, fields: Record<number, string>) {
+  async submitSignature(token: string, fields: Record<number, string>, ipAddress?: string, signedAt?: string) {
     const { data: recipient, error: rErr } = await supabase
       .from("recipients")
       .select("*")
@@ -910,10 +910,16 @@ export const mockApi = {
       .single();
     if (rErr) throw new Error("404: Invalid signing token");
 
-    // Update recipient status
+    const now = signedAt || new Date().toISOString();
+
+    // Update recipient status with real IP and server-verified timestamp
     await supabase
       .from("recipients")
-      .update({ status: "signed", signed_at: new Date().toISOString() })
+      .update({
+        status: "signed",
+        signed_at: now,
+        ...(ipAddress ? { ip_address: ipAddress } : {}),
+      })
       .eq("id", recipient.id);
 
     // Update field values

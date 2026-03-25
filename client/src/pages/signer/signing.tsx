@@ -128,6 +128,18 @@ export default function SigningPage() {
   const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
+  const [consentGiven, setConsentGiven] = useState(false);
+  const [showConsentScreen, setShowConsentScreen] = useState(true);
+  const [signerIp, setSignerIp] = useState("");
+  const [signedAt] = useState(new Date().toISOString());
+
+  // Capture real IP address on mount
+  useEffect(() => {
+    fetch("https://api.ipify.org?format=json")
+      .then(r => r.json())
+      .then(d => setSignerIp(d.ip || ""))
+      .catch(() => setSignerIp("unknown"));
+  }, []);
 
   // Fetch document data by token
   const { data: signingData, isLoading } = useQuery<any>({
@@ -152,6 +164,8 @@ export default function SigningPage() {
       await apiRequest("POST", `/api/sign/${token}/complete`, {
         fields: fieldValues,
         signature: signatureData,
+        ipAddress: signerIp,
+        signedAt,
       });
     },
     onSuccess: () => {
@@ -369,6 +383,69 @@ export default function SigningPage() {
               This document has been voided. Please contact the sender for more information.
             </p>
             <p className="text-xs text-muted-foreground">You may close this window.</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Consent screen — shown before signing UI
+  if (showConsentScreen) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center p-4">
+        <Card className="max-w-lg w-full">
+          <CardContent className="pt-8 pb-8 space-y-6">
+            {/* Logo */}
+            <div className="flex items-center gap-3 justify-center">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#c8210d]">
+                <PenTool className="h-5 w-5 text-white" />
+              </div>
+              <span className="font-bold text-lg">Draft<span className="text-[#c8210d]">Send</span>Sign</span>
+            </div>
+
+            <div className="text-center">
+              <h1 className="text-xl font-bold mb-1">Review &amp; Sign</h1>
+              <p className="text-sm text-muted-foreground">
+                <strong>{recipient?.name}</strong>, you've been asked to sign
+              </p>
+              <p className="text-sm font-medium mt-1">{document?.title}</p>
+            </div>
+
+            <Separator />
+
+            <div className="rounded-lg border bg-muted/30 p-4 space-y-3 text-sm">
+              <p className="font-medium text-sm">Before you sign, please understand:</p>
+              <ul className="space-y-2 text-muted-foreground text-xs leading-relaxed">
+                <li className="flex gap-2"><span className="text-[#c8210d] font-bold shrink-0">•</span>Your electronic signature is legally binding under the ESIGN Act and eIDAS Regulation.</li>
+                <li className="flex gap-2"><span className="text-[#c8210d] font-bold shrink-0">•</span>Your IP address and timestamp will be recorded as part of the audit trail.</li>
+                <li className="flex gap-2"><span className="text-[#c8210d] font-bold shrink-0">•</span>By signing, you agree to conduct this transaction electronically.</li>
+              </ul>
+            </div>
+
+            {/* Consent checkbox */}
+            <label className="flex items-start gap-3 cursor-pointer group">
+              <input
+                type="checkbox"
+                checked={consentGiven}
+                onChange={e => setConsentGiven(e.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border-gray-300 text-[#c8210d] cursor-pointer"
+              />
+              <span className="text-sm text-muted-foreground leading-relaxed">
+                I agree to use electronic signatures and understand this is legally binding.
+              </span>
+            </label>
+
+            <Button
+              className="w-full bg-[#c8210d] hover:bg-[#a61b0b] text-white font-semibold h-11"
+              disabled={!consentGiven}
+              onClick={() => setShowConsentScreen(false)}
+            >
+              Continue to Sign
+            </Button>
+
+            <p className="text-center text-[11px] text-muted-foreground">
+              Sent via DraftSendSign &middot; app.draftsendsign.com
+            </p>
           </CardContent>
         </Card>
       </div>

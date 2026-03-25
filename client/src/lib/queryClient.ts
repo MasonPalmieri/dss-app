@@ -66,7 +66,13 @@ async function mockFetch(url: string, method = "GET", body?: unknown): Promise<u
 
   // Signer
   if (path.match(/^\/api\/sign\/.+$/) && method === "GET") return mockApi.getSignerInfo(path.split("/sign/")[1]);
-  if (path.match(/^\/api\/sign\/.+$/) && method === "POST") return mockApi.submitSignature(path.split("/sign/")[1], body as any);
+  if (path.match(/^\/api\/sign\/.+$/) && method === "POST") {
+    const b = body as any;
+    // Extract token — strip /complete suffix if present
+    const tokenRaw = path.split("/sign/")[1];
+    const token = tokenRaw.replace(/\/complete$/, "");
+    return mockApi.submitSignature(token, b?.fields || b, b?.ipAddress, b?.signedAt);
+  }
 
   // Users
   if (path.match(/^\/api\/users\/.+$/) && method === "GET") return mockApi.getUser(path.split("/")[3]);
