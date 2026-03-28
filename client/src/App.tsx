@@ -37,6 +37,10 @@ import Notifications from "@/pages/app/notifications";
 // Signer experience
 import SigningPage from "@/pages/signer/signing";
 
+// Legal pages
+import TermsPage from "@/pages/legal/terms";
+import PrivacyPage from "@/pages/legal/privacy";
+
 // Mass Signature
 import MassSignature from "@/pages/app/mass-signature";
 import MassSignPage from "@/pages/mass-sign";
@@ -44,7 +48,7 @@ import MassSignPage from "@/pages/mass-sign";
 import NotFound from "@/pages/not-found";
 
 // Routes that are always public — no gate required
-const PUBLIC_ROUTES = ["/", "/pricing", "/features", "/security", "/about", "/login", "/signup", "/forgot-password", "/reset-password"];
+const PUBLIC_ROUTES = ["/", "/pricing", "/features", "/security", "/about", "/login", "/signup", "/forgot-password", "/reset-password", "/terms", "/privacy"];
 
 function isPublicPath(path: string): boolean {
   if (PUBLIC_ROUTES.includes(path)) return true;
@@ -114,6 +118,8 @@ function GatedAppRouter() {
         <Route path="/signup" component={Signup} />
         <Route path="/forgot-password" component={ForgotPassword} />
         <Route path="/reset-password">{() => <ForgotPassword initialStep="reset" />}</Route>
+        <Route path="/terms" component={TermsPage} />
+        <Route path="/privacy" component={PrivacyPage} />
         <Route path="/sign/:token" component={SigningPage} />
         <Route path="/mass-sign/:token" component={MassSignPage} />
         <Route component={NotFound} />

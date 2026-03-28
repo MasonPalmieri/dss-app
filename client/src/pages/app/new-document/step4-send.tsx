@@ -2,7 +2,8 @@ import { useState } from "react";
 import { mockApi } from "@/lib/mockApi";
 import { queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/contexts/auth-context";
-import { sendSigningRequestEmail, sendCompletionEmail } from "@/lib/resend";
+import { sendSigningRequestEmail } from "@/lib/resend";
+import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -11,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { ArrowLeft, Send, Save, Loader2, FileText, Mail } from "lucide-react";
+import { ArrowLeft, Send, Save, Loader2, FileText, Upload } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { WizardFile, WizardRecipient, PlacedField } from "./index";
 
@@ -33,29 +34,36 @@ export default function Step4Send({ file, recipients, fields, documentId, setDoc
   const [reminderFrequency, setReminderFrequency] = useState("none");
   const [expiresAt, setExpiresAt] = useState("");
   const [sending, setSending] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<string | null>(null);
 
   const createAndSend = async (asDraft: boolean) => {
     setSending(true);
     try {
-      // Upload PDF to Supabase Storage if a real file was uploaded
+      // Step 1 — Upload PDF to Supabase Storage first
       let filePath: string | null = null;
-      if (file?.fileObject) {
-        const { supabaseAdmin } = await import('@/lib/supabaseAdmin');
-        const path = `${user?.id}/${Date.now()}-${file.name.replace(/\s+/g, '_')}`;
-        const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
-          .from('documents')
-          .upload(path, file.fileObject, { contentType: 'application/pdf', upsert: false });
-        if (!uploadError && uploadData) {
+      if (file?.fileObject && user?.id) {
+        setUploadProgress("Uploading document...");
+        const safeName = file.name.replace(/\s+/g, "_");
+        const path = `${user.id}/${Date.now()}-${safeName}`;
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from("documents")
+          .upload(path, file.fileObject, {
+            contentType: "application/pdf",
+            upsert: false,
+          });
+        if (uploadError) {
+          console.warn("PDF upload failed:", uploadError.message);
+          // Non-blocking — continue without storage if upload fails
+        } else if (uploadData) {
           filePath = uploadData.path;
-        } else if (uploadError) {
-          console.warn('PDF upload failed:', uploadError.message);
         }
+        setUploadProgress(null);
       }
 
-      // Create document
+      // Step 2 — Create document record with filePath
       const doc = await mockApi.createDocument({
         title: subject,
-        senderId: user?.id || 1,
+        senderId: user?.id || "1",
         fileName: file?.name || "document.pdf",
         fileSize: file?.size || "0KB",
         filePath,
@@ -68,9 +76,10 @@ export default function Step4Send({ file, recipients, fields, documentId, setDoc
       });
       setDocumentId(doc.id);
 
-      // Add recipients
+      // Step 3 — Add recipients, build wizard ID → DB ID map
+      const recipientIdMap: Record<string, number> = {};
       for (const r of recipients) {
-        await mockApi.createRecipient({
+        const created = await mockApi.createRecipient({
           documentId: doc.id,
           name: r.name,
           email: r.email,
@@ -79,16 +88,18 @@ export default function Step4Send({ file, recipients, fields, documentId, setDoc
           authMethod: r.authMethod,
           color: r.color,
         });
+        recipientIdMap[r.id] = created.id; // map wizard temp ID → real DB ID
       }
 
-      // Add fields
+      // Step 4 — Add fields with correct recipient_id
       for (const f of fields) {
         await mockApi.createField({
           documentId: doc.id,
+          recipientId: recipientIdMap[f.recipientId] ?? null,
           type: f.type,
           page: f.page,
-          x: Math.round(f.x),
-          y: Math.round(f.y),
+          x: f.x,   // stored as percentage
+          y: f.y,
           width: f.width,
           height: f.height,
           required: f.required,
@@ -96,14 +107,13 @@ export default function Step4Send({ file, recipients, fields, documentId, setDoc
         });
       }
 
+      // Step 5 — Send or save as draft
       if (!asDraft) {
         await mockApi.sendDocument(doc.id);
 
-        // Fetch the created recipients to get their signing tokens
         const createdRecipients = await mockApi.getRecipients(doc.id);
-
-        // Send real signing request emails via Resend
         const senderName = user?.fullName || "DraftSendSign";
+
         const emailPromises = createdRecipients.map((r) =>
           sendSigningRequestEmail({
             recipientName: r.name,
@@ -134,6 +144,7 @@ export default function Step4Send({ file, recipients, fields, documentId, setDoc
       toast({ title: "Error", description: err.message, variant: "destructive" });
     } finally {
       setSending(false);
+      setUploadProgress(null);
     }
   };
 
@@ -187,6 +198,11 @@ export default function Step4Send({ file, recipients, fields, documentId, setDoc
               <div>
                 <p className="text-sm font-medium">{file?.name || "Document"}</p>
                 <p className="text-xs text-muted-foreground">{file?.size} · {file?.pages} page(s)</p>
+                {file?.fileObject && (
+                  <p className="text-[10px] text-green-600 mt-0.5 flex items-center gap-1">
+                    <Upload className="h-2.5 w-2.5" /> Will upload to secure storage
+                  </p>
+                )}
               </div>
             </div>
             <Separator />
@@ -231,8 +247,17 @@ export default function Step4Send({ file, recipients, fields, documentId, setDoc
             disabled={sending || recipients.length === 0}
             data-testid="send-document"
           >
-            {sending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}
-            Send Document
+            {sending ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                {uploadProgress || "Sending..."}
+              </>
+            ) : (
+              <>
+                <Send className="h-4 w-4 mr-2" />
+                Send Document
+              </>
+            )}
           </Button>
         </div>
       </div>

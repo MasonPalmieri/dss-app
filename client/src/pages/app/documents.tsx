@@ -34,6 +34,7 @@ import {
   XCircle,
   FileText,
   Loader2,
+  AlertCircle,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -60,7 +61,7 @@ export default function DocumentsPage() {
   const [activeTab, setActiveTab] = useState("all");
   const { toast } = useToast();
 
-  const { data: documents, isLoading } = useQuery<any[]>({
+  const { data: documents, isLoading, isError } = useQuery<any[]>({
     queryKey: ["/api/documents", "userId", String(user?.id || 1)],
   });
 
@@ -167,10 +168,26 @@ export default function DocumentsPage() {
                 <div className="p-6 space-y-3">
                   {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
                 </div>
+              ) : isError ? (
+                <div className="p-16 text-center">
+                  <AlertCircle className="h-12 w-12 mx-auto mb-4 text-destructive/50" />
+                  <p className="font-medium mb-1">Could not load documents</p>
+                  <p className="text-muted-foreground text-sm mb-4">There was a problem fetching your documents.</p>
+                  <Button variant="outline" size="sm" onClick={() => queryClient.invalidateQueries({ queryKey: ["/api/documents"] })}>
+                    Try again
+                  </Button>
+                </div>
               ) : filteredDocs.length === 0 ? (
                 <div className="p-16 text-center">
                   <FileText className="h-12 w-12 mx-auto mb-4 text-muted-foreground/40" />
-                  <p className="text-muted-foreground text-sm">No documents found</p>
+                  <p className="font-medium mb-1">No documents yet</p>
+                  <p className="text-muted-foreground text-sm mb-4">Send your first document for signature in minutes.</p>
+                  <Link href="/new-document">
+                    <Button className="bg-[#c8210d] hover:bg-[#a61b0b] text-white" size="sm">
+                      <Plus className="h-4 w-4 mr-2" />
+                      New Document
+                    </Button>
+                  </Link>
                 </div>
               ) : (
                 <Table>

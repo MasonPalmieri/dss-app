@@ -895,9 +895,24 @@ export const mockApi = {
       .select("*")
       .eq("document_id", doc.id);
 
+    // Generate a signed URL for the PDF so the signer can access it without auth
+    let pdfSignedUrl: string | null = null;
+    if (doc.file_path) {
+      const { data: signedData } = await supabase.storage
+        .from("documents")
+        .createSignedUrl(doc.file_path, 3600); // 1 hour expiry
+      if (signedData?.signedUrl) {
+        // Ensure it's an absolute URL
+        const raw = signedData.signedUrl;
+        pdfSignedUrl = raw.startsWith("http")
+          ? raw
+          : `https://aqlisniihrcazgxhqgki.supabase.co/storage/v1${raw}`;
+      }
+    }
+
     return {
       recipient: toRecipient(recipient),
-      document: toDocument(doc),
+      document: { ...toDocument(doc), pdfSignedUrl },
       fields: (fields || []).map(toField),
     };
   },

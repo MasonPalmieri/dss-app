@@ -1,10 +1,13 @@
+import { useState } from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
+import { queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/contexts/auth-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Progress } from "@/components/ui/progress";
 import {
   Send,
   Clock,
@@ -18,6 +21,9 @@ import {
   PenTool,
   XCircle,
   MoreHorizontal,
+  X,
+  AlertCircle,
+  Download,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -44,11 +50,29 @@ const activityIcons: Record<string, any> = {
   document_declined: XCircle,
 };
 
+const onboardingSteps = [
+  {
+    title: "Upload your first document",
+    description: "Choose a PDF or Word file to get started.",
+    href: "/new-document",
+    cta: true,
+  },
+  {
+    title: "Add recipients and send for signature",
+    description: "Enter your signers' email addresses and assign fields for them to complete.",
+  },
+  {
+    title: "Download the signed copy",
+    description: "Once all parties have signed, download the fully executed document.",
+  },
+];
+
 export default function DashboardPage() {
   const { user } = useAuth();
   const userId = String(user?.id || 1);
+  const [dismissedOnboarding, setDismissedOnboarding] = useState(false);
 
-  const { data: stats, isLoading: statsLoading } = useQuery<any>({
+  const { data: stats, isLoading: statsLoading, isError: statsError } = useQuery<any>({
     queryKey: ["/api/stats", "userId", userId],
   });
 
@@ -70,8 +94,82 @@ export default function DashboardPage() {
   const recentDocs = (documents || []).slice(0, 5);
   const recentActivity = (auditLogs || []).slice(0, 8);
 
+  const showOnboarding = !dismissedOnboarding && (!documents || documents.length === 0);
+  const onboardingProgress = 0; // Step 1 is always next for a new user
+
   return (
     <div className="space-y-6">
+
+      {/* Onboarding Checklist — shown only when user has 0 documents */}
+      {showOnboarding && (
+        <Card className="border-[#c8210d]/20 bg-[#c8210d]/[0.03]">
+          <CardHeader className="pb-3 flex flex-row items-start justify-between gap-2">
+            <div>
+              <CardTitle className="text-base font-semibold">
+                Welcome to DraftSendSign 👋
+              </CardTitle>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                Get up and running in 3 easy steps.
+              </p>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground"
+              onClick={() => setDismissedOnboarding(true)}
+              aria-label="Dismiss onboarding"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Progress bar */}
+            <div className="flex items-center gap-3">
+              <Progress value={onboardingProgress} className="h-1.5 flex-1" />
+              <span className="text-xs text-muted-foreground whitespace-nowrap">
+                0 of 3 complete
+              </span>
+            </div>
+
+            {/* Steps */}
+            <div className="space-y-2">
+              {onboardingSteps.map((step, idx) => (
+                <div
+                  key={idx}
+                  className={`flex items-start gap-3 rounded-lg p-3 ${
+                    idx === 0
+                      ? "bg-background border border-[#c8210d]/20"
+                      : "opacity-60"
+                  }`}
+                >
+                  <div
+                    className={`mt-0.5 h-5 w-5 rounded-full flex items-center justify-center shrink-0 text-xs font-bold ${
+                      idx === 0
+                        ? "bg-[#c8210d] text-white"
+                        : "bg-muted text-muted-foreground border"
+                    }`}
+                  >
+                    {idx + 1}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium">{step.title}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{step.description}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* CTA */}
+            <Link href="/new-document">
+              <Button className="bg-[#c8210d] hover:bg-[#a61b0b] text-white w-full sm:w-auto">
+                <Send className="h-4 w-4 mr-2" />
+                Send Your First Document
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {statCards.map((stat) => (
@@ -81,6 +179,11 @@ export default function DashboardPage() {
                 <div className="space-y-2">
                   <Skeleton className="h-8 w-16" />
                   <Skeleton className="h-4 w-24" />
+                </div>
+              ) : statsError ? (
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <AlertCircle className="h-4 w-4 text-destructive shrink-0" />
+                  <p className="text-xs">Failed to load</p>
                 </div>
               ) : (
                 <div className="flex items-start justify-between">

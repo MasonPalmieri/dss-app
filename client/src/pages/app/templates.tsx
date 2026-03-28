@@ -31,6 +31,7 @@ import {
   LayoutGrid,
   List,
   Play,
+  AlertCircle,
 } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
 import { useLocation } from "wouter";
@@ -43,7 +44,7 @@ export default function Templates() {
   const [newName, setNewName] = useState("");
   const [newDesc, setNewDesc] = useState("");
 
-  const { data: templates = [] } = useQuery<any[]>({
+  const { data: templates = [], isError: templatesError } = useQuery<any[]>({
     queryKey: ["/api/templates"],
   });
 
@@ -128,7 +129,18 @@ export default function Templates() {
         </div>
       </div>
 
-      {filtered.length === 0 ? (
+      {templatesError ? (
+        <Card>
+          <CardContent className="py-16 text-center">
+            <AlertCircle className="h-12 w-12 text-destructive/50 mx-auto mb-4" />
+            <h3 className="font-semibold mb-1">Could not load templates</h3>
+            <p className="text-sm text-muted-foreground mb-4">There was a problem fetching your templates.</p>
+            <Button variant="outline" onClick={() => queryClient.invalidateQueries({ queryKey: ["/api/templates"] })}>
+              Try again
+            </Button>
+          </CardContent>
+        </Card>
+      ) : filtered.length === 0 ? (
         <Card>
           <CardContent className="py-16 text-center">
             <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />

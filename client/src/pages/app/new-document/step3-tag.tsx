@@ -19,15 +19,16 @@ const FIELD_TYPES = [
   { type: "title", label: "Title / Role", icon: Briefcase, color: "#0d9488" },
 ];
 
+// Sizes as percentage of page width/height
 const FIELD_SIZES: Record<string, { w: number; h: number }> = {
-  signature: { w: 200, h: 56 },
-  initials: { w: 80, h: 44 },
-  date: { w: 140, h: 36 },
-  name: { w: 180, h: 36 },
-  text: { w: 180, h: 36 },
-  checkbox: { w: 28, h: 28 },
-  company: { w: 180, h: 36 },
-  title: { w: 160, h: 36 },
+  signature: { w: 24, h: 6 },
+  initials:  { w: 10, h: 5 },
+  date:      { w: 16, h: 4 },
+  name:      { w: 22, h: 4 },
+  text:      { w: 22, h: 4 },
+  checkbox:  { w: 3.5, h: 3.5 },
+  company:   { w: 22, h: 4 },
+  title:     { w: 20, h: 4 },
 };
 
 // Demo page content (3 pages of a realistic NDA)
@@ -205,9 +206,10 @@ function DocumentPage({
     if (didDragRef.current) { didDragRef.current = false; return; }
     if (!activeRecipient) return;
     const rect = canvasRef.current!.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    onPlaceField(pageNum, x, y);
+    // Store as percentage of page dimensions (0-100) for resolution independence
+    const xPct = ((e.clientX - rect.left) / rect.width) * 100;
+    const yPct = ((e.clientY - rect.top) / rect.height) * 100;
+    onPlaceField(pageNum, xPct, yPct);
   };
 
   const handleFieldMouseDown = (e: React.MouseEvent, fieldId: string) => {
@@ -231,13 +233,12 @@ function DocumentPage({
     if (!ds || !canvasRef.current) return;
     const field = fields.find(f => f.id === ds.fieldId);
     if (!field) return;
-    const dx = e.clientX - ds.startMouseX;
-    const dy = e.clientY - ds.startMouseY;
-    if (Math.abs(dx) > 2 || Math.abs(dy) > 2) didDragRef.current = true;
-    const canvasW = canvasRef.current.offsetWidth;
-    const canvasH = canvasRef.current.offsetHeight;
-    const newX = Math.max(0, Math.min(ds.startFieldX + dx, canvasW - field.width));
-    const newY = Math.max(0, Math.min(ds.startFieldY + dy, canvasH - field.height));
+    const rect = canvasRef.current.getBoundingClientRect();
+    const dx = ((e.clientX - ds.startMouseX) / rect.width) * 100;
+    const dy = ((e.clientY - ds.startMouseY) / rect.height) * 100;
+    if (Math.abs(e.clientX - ds.startMouseX) > 2 || Math.abs(e.clientY - ds.startMouseY) > 2) didDragRef.current = true;
+    const newX = Math.max(0, Math.min(ds.startFieldX + dx, 100 - field.width));
+    const newY = Math.max(0, Math.min(ds.startFieldY + dy, 100 - field.height));
     onMoveField(ds.fieldId, newX, newY);
   };
 
@@ -318,10 +319,10 @@ function DocumentPage({
               key={f.id}
               className="absolute rounded flex items-center justify-center group"
               style={{
-                left: f.x,
-                top: f.y,
-                width: f.width,
-                height: f.height,
+                left: `${f.x}%`,
+                top: `${f.y}%`,
+                width: `${f.width}%`,
+                height: `${f.height}%`,
                 border: `2px solid ${color}`,
                 backgroundColor: `${color}18`,
                 cursor: isDragging ? "grabbing" : "grab",

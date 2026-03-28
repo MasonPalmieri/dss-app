@@ -20,7 +20,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Plus, Search, MoreHorizontal, Trash2, Edit, Mail, User } from "lucide-react";
+import { Plus, Search, MoreHorizontal, Trash2, Edit, Mail, User, AlertCircle } from "lucide-react";
 
 export default function Contacts() {
   const { user } = useAuth();
@@ -29,7 +29,7 @@ export default function Contacts() {
   const [editId, setEditId] = useState<number | null>(null);
   const [form, setForm] = useState({ name: "", email: "", company: "", phone: "" });
 
-  const { data: contacts = [] } = useQuery<any[]>({
+  const { data: contacts = [], isError: contactsError } = useQuery<any[]>({
     queryKey: ["/api/contacts"],
   });
 
@@ -94,7 +94,18 @@ export default function Contacts() {
         <Input placeholder="Search contacts..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} data-testid="contact-search" />
       </div>
 
-      {filtered.length === 0 ? (
+      {contactsError ? (
+        <Card>
+          <CardContent className="py-16 text-center">
+            <AlertCircle className="h-12 w-12 text-destructive/50 mx-auto mb-4" />
+            <h3 className="font-semibold mb-1">Could not load contacts</h3>
+            <p className="text-sm text-muted-foreground mb-4">There was a problem fetching your contacts.</p>
+            <Button variant="outline" onClick={() => queryClient.invalidateQueries({ queryKey: ["/api/contacts"] })}>
+              Try again
+            </Button>
+          </CardContent>
+        </Card>
+      ) : filtered.length === 0 ? (
         <Card>
           <CardContent className="py-16 text-center">
             <User className="h-12 w-12 text-muted-foreground mx-auto mb-4" />

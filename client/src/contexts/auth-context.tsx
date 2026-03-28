@@ -145,6 +145,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const base = buildAuthUser(authData.session);
         setUser({ ...base });
       }
+
+      // Send branded welcome email (non-blocking)
+      fetch('/api/send-welcome', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: data.email, fullName: data.fullName }),
+      }).catch(() => {});
     }
   }, []);
 
