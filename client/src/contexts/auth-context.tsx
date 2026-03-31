@@ -92,6 +92,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const base = buildAuthUser(session);
         const profile = await loadProfileData(session.user.id);
         setUser({ ...base, ...profile });
+
+        // After email confirmation, redirect to dashboard
+        if (event === 'SIGNED_IN' && window.location.hash.includes('type=signup')) {
+          window.location.hash = '/dashboard';
+        }
+        // After password reset confirmation
+        if (event === 'PASSWORD_RECOVERY') {
+          window.location.hash = '/reset-password';
+        }
       } else {
         setUser(null);
       }
@@ -115,6 +124,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       email: data.email,
       password: data.password,
       options: {
+        emailRedirectTo: 'https://app.draftsendsign.com/#/dashboard',
         data: {
           full_name: data.fullName,
           company: data.company || "",

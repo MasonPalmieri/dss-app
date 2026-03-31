@@ -5,7 +5,6 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/contexts/auth-context";
-import { GateProvider, GateScreen, useGate } from "@/components/app-gate";
 import AppLayout from "@/components/layout";
 
 // Marketing pages
@@ -47,19 +46,15 @@ import MassSignPage from "@/pages/mass-sign";
 
 import NotFound from "@/pages/not-found";
 
-// Routes that are always public — no gate required
-const PUBLIC_ROUTES = ["/", "/pricing", "/features", "/security", "/about", "/login", "/signup", "/forgot-password", "/reset-password", "/terms", "/privacy"];
+const PUBLIC_PATHS = ["/", "/pricing", "/features", "/security", "/about", "/login", "/signup", "/forgot-password", "/reset-password", "/terms", "/privacy"];
 
 function isPublicPath(path: string): boolean {
-  if (PUBLIC_ROUTES.includes(path)) return true;
-  // Signer links are public (/sign/...)
+  if (PUBLIC_PATHS.includes(path)) return true;
   if (path.startsWith("/sign/")) return true;
-  // Mass signature public signing page
   if (path.startsWith("/mass-sign/")) return true;
   return false;
 }
 
-// Determines if the current path needs the app shell (sidebar + topnav)
 function isAppPath(path: string): boolean {
   const appPaths = [
     "/dashboard", "/documents", "/new-document", "/templates",
@@ -72,7 +67,6 @@ function isAppPath(path: string): boolean {
 function AppRoutes() {
   return (
     <Switch>
-      {/* App pages — rendered inside AppLayout shell */}
       <Route path="/dashboard" component={Dashboard} />
       <Route path="/documents" component={Documents} />
       <Route path="/documents/:id" component={DocumentDetail} />
@@ -90,13 +84,11 @@ function AppRoutes() {
   );
 }
 
-function GatedAppRouter() {
-  const { isUnlocked } = useGate();
+function AppRouter() {
   const { isAuthenticated, isLoading } = useAuth();
   const [location] = useLocation();
 
-  // Supabase is checking for an existing session — show nothing to avoid
-  // flashing the gate screen at users who are already logged in
+  // Wait for Supabase session check — prevents flash of login screen
   if (isLoading) {
     return (
       <div className="min-h-screen bg-[#0d1117] flex items-center justify-center">
@@ -105,7 +97,7 @@ function GatedAppRouter() {
     );
   }
 
-  // Public routes (sign, mass-sign, marketing, auth) bypass the gate entirely
+  // Always-public routes — no auth needed
   if (isPublicPath(location)) {
     return (
       <Switch>
@@ -127,17 +119,17 @@ function GatedAppRouter() {
     );
   }
 
-  // Not unlocked and not authenticated → show gate
-  if (!isUnlocked && !isAuthenticated) {
-    return <GateScreen />;
+  // Unauthenticated users trying to reach app → send to login
+  if (!isAuthenticated) {
+    return <Redirect to="/login" />;
   }
 
-  // Authenticated but on root/login/signup → go straight to dashboard
+  // Authenticated user on marketing/auth pages → go to dashboard
   if (isAuthenticated && (location === "/" || location === "/login" || location === "/signup")) {
     return <Redirect to="/dashboard" />;
   }
 
-  // App routes get the persistent layout shell
+  // App routes with sidebar shell
   if (isAppPath(location)) {
     return (
       <AppLayout>
@@ -148,7 +140,6 @@ function GatedAppRouter() {
 
   return (
     <Switch>
-      {/* Auth pages — behind gate */}
       <Route path="/login" component={Login} />
       <Route path="/signup" component={Signup} />
       <Route path="/forgot-password" component={ForgotPassword} />
@@ -158,42 +149,15 @@ function GatedAppRouter() {
   );
 }
 
-// Bridge: sits inside AuthProvider so it can call useAuth(),
-// then passes an auto-login callback into GateProvider.
-function AuthenticatedGate({ children }: { children: React.ReactNode }) {
-  const { login } = useAuth();
-
-  const handleUnlock = () => {
-    // Log in as demo account, then navigate to dashboard once auth resolves
-    login("help@draftsendsign.com", "demo")
-      .then(() => {
-        // Use hash navigation so wouter picks it up
-        window.location.hash = "/dashboard";
-      })
-      .catch(() => {
-        // Login failed — gate is still unlocked, user sees login page
-        window.location.hash = "/login";
-      });
-  };
-
-  return (
-    <GateProvider onUnlock={handleUnlock}>
-      {children}
-    </GateProvider>
-  );
-}
-
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <AuthProvider>
-          <AuthenticatedGate>
-            <Toaster />
-            <Router hook={useHashLocation}>
-              <GatedAppRouter />
-            </Router>
-          </AuthenticatedGate>
+          <Toaster />
+          <Router hook={useHashLocation}>
+            <AppRouter />
+          </Router>
         </AuthProvider>
       </TooltipProvider>
     </QueryClientProvider>

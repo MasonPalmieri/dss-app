@@ -16,7 +16,15 @@ import {
 import { useHashLocation } from "wouter/use-hash-location";
 
 // ── PDF page renderer ────────────────────────────────────────────────────────
-function PdfPageViewer({ signedUrl, pageNum }: { signedUrl: string; pageNum: number }) {
+function PdfPageViewer({
+  signedUrl,
+  pageNum,
+  onPageCount,
+}: {
+  signedUrl: string;
+  pageNum: number;
+  onPageCount?: (n: number) => void;
+}) {
   const [imgSrc, setImgSrc] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -33,6 +41,8 @@ function PdfPageViewer({ signedUrl, pageNum }: { signedUrl: string; pageNum: num
         const workerUrl = new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url).href;
         pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
         const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+        // Report total pages on first page load
+        if (pageNum === 1 && onPageCount) onPageCount(pdf.numPages);
         const page = await pdf.getPage(pageNum);
         const viewport = page.getViewport({ scale: 1.5 });
         const canvas = document.createElement("canvas");
@@ -46,14 +56,14 @@ function PdfPageViewer({ signedUrl, pageNum }: { signedUrl: string; pageNum: num
   }, [signedUrl, pageNum]);
 
   if (loading) return (
-    <div className="flex items-center justify-center w-full min-h-[500px]">
-      <div className="animate-spin h-8 w-8 border-2 border-[#c8210d] border-t-transparent rounded-full" />
+    <div className="flex items-center justify-center w-full min-h-[400px]">
+      <div className="animate-spin h-6 w-6 border-2 border-[#c8210d] border-t-transparent rounded-full" />
     </div>
   );
   if (error || !imgSrc) return (
-    <div className="flex flex-col items-center justify-center w-full min-h-[500px] text-muted-foreground">
-      <FileText className="h-12 w-12 mb-2 opacity-30" />
-      <p className="text-sm">Could not load document</p>
+    <div className="flex flex-col items-center justify-center w-full min-h-[400px] text-muted-foreground">
+      <FileText className="h-10 w-10 mb-2 opacity-30" />
+      <p className="text-sm">Could not load page {pageNum}</p>
     </div>
   );
   return <img src={imgSrc} alt={`Page ${pageNum}`} className="w-full h-auto block" />;
@@ -77,6 +87,7 @@ export default function SigningPage() {
   const [consentGiven, setConsentGiven] = useState(false);
   const [showConsentScreen, setShowConsentScreen] = useState(true);
   const [signerIp, setSignerIp] = useState("");
+  const [totalPages, setTotalPages] = useState(1);
   const [signedAt] = useState(new Date().toISOString());
 
   // Field refs for auto-scroll
@@ -431,12 +442,26 @@ export default function SigningPage() {
           </div>
         )}
 
-        {/* PDF with fields overlaid */}
+        {/* PDF with fields overlaid — all pages stacked */}
         <div className="bg-white rounded-xl shadow-sm overflow-hidden">
           <div className="relative w-full" style={{ aspectRatio: document?.pdfSignedUrl ? undefined : "8.5/11" }}>
             {document?.pdfSignedUrl ? (
               <div className="relative w-full">
-                <PdfPageViewer signedUrl={document.pdfSignedUrl} pageNum={1} />
+                {/* Render all pages stacked */}
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map(pageNum => (
+                  <div key={pageNum} className="relative w-full">
+                    {pageNum > 1 && (
+                      <div className="text-xs text-center text-muted-foreground py-2 bg-gray-100 border-y">
+                        Page {pageNum} of {totalPages}
+                      </div>
+                    )}
+                    <PdfPageViewer
+                      signedUrl={document.pdfSignedUrl}
+                      pageNum={pageNum}
+                      onPageCount={pageNum === 1 ? setTotalPages : undefined}
+                    />
+                  </div>
+                ))}
                 {fields.map((f: any, idx: number) => {
                   const isFilled = !!fieldValues[f.id];
                   const isCurrent = idx === currentFieldIndex;

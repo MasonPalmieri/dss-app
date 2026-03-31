@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -8,354 +9,819 @@ import {
   PenTool,
   Shield,
   Clock,
-  Bell,
-  FolderOpen,
+  FileText,
   Lock,
   FileCheck,
   ArrowRight,
   Check,
-  Star,
-  Building2,
-  Scale,
-  Home,
-  Briefcase,
+  X,
+  BarChart2,
+  Mail,
+  Menu,
+  Zap,
 } from "lucide-react";
 
-const steps = [
-  { icon: Upload, title: "Upload", desc: "Drag & drop your PDF documents" },
-  { icon: Users, title: "Add Recipients", desc: "Add signers, set signing order" },
-  { icon: PenTool, title: "Sign", desc: "Recipients sign from any device" },
+// ─── Data ────────────────────────────────────────────────────────────────────
+
+const NAV_LINKS = [
+  { label: "Features", href: "/#/features" },
+  { label: "Pricing", href: "/#/pricing" },
+  { label: "Security", href: "/#/security" },
 ];
 
-const features = [
-  { icon: PenTool, title: "Drag & Drop Fields", desc: "Place signature, date, and text fields anywhere on your documents with an intuitive editor." },
-  { icon: Clock, title: "Real-Time Tracking", desc: "Know exactly when documents are viewed, signed, or declined with live status updates." },
-  { icon: Bell, title: "Smart Reminders", desc: "Automated reminders ensure documents get signed on time, every time." },
-  { icon: FolderOpen, title: "Template Library", desc: "Save time with reusable templates for your most common agreements." },
-  { icon: Shield, title: "Bank-Grade Security", desc: "256-bit encryption, SOC 2 compliance, and comprehensive audit trails." },
-  { icon: FileCheck, title: "Legal Compliance", desc: "Fully compliant with ESIGN Act and UETA for legally binding signatures." },
+const TRUST_BADGES = [
+  "NDA",
+  "Employment Contract",
+  "Vendor Agreement",
+  "Real Estate",
+  "Partnership Agreement",
 ];
 
-const useCases = [
-  { icon: Scale, title: "Law Firms", desc: "Streamline client agreements, retainers, and court filings." },
-  { icon: Home, title: "Real Estate", desc: "Close deals faster with instant lease and purchase agreements." },
-  { icon: Briefcase, title: "HR Teams", desc: "Onboard employees with offer letters and policy acknowledgments." },
-  { icon: Building2, title: "Startups", desc: "Move fast with investor agreements, NDAs, and contractor terms." },
+const STEPS = [
+  {
+    icon: Upload,
+    title: "Upload",
+    desc: "Upload any PDF document from your computer or cloud storage.",
+  },
+  {
+    icon: Mail,
+    title: "Send",
+    desc: "Add recipients and place signature fields exactly where you need them.",
+  },
+  {
+    icon: PenTool,
+    title: "Sign",
+    desc: "Recipients sign from any device — legally binding under the ESIGN Act.",
+  },
 ];
 
-const plans = [
-  { name: "Starter", price: "Free", docs: "3 docs/mo", users: "1 user" },
-  { name: "Professional", price: "$15", docs: "50 docs/mo", users: "3 users", popular: true },
-  { name: "Business", price: "$35", docs: "Unlimited", users: "10 users" },
+const FEATURES = [
+  {
+    icon: Upload,
+    title: "Upload & Send PDFs",
+    desc: "Drag and drop any PDF. Place signature, date, and text fields with a visual editor.",
+  },
+  {
+    icon: Clock,
+    title: "Real-time tracking",
+    desc: "Know instantly when documents are viewed, signed, or declined with live status updates.",
+  },
+  {
+    icon: Shield,
+    title: "Legally binding (ESIGN Act)",
+    desc: "All signatures are fully compliant with the US ESIGN Act and UETA regulations.",
+  },
+  {
+    icon: FileCheck,
+    title: "Audit trail",
+    desc: "Tamper-proof, timestamped records of every view, click, and signature event.",
+  },
+  {
+    icon: BarChart2,
+    title: "Mass signature campaigns",
+    desc: "Send a document to hundreds of recipients at once — each gets their own unique link.",
+  },
+  {
+    icon: Users,
+    title: "Team management",
+    desc: "Invite team members, set roles, share templates, and manage documents together.",
+  },
 ];
 
-const testimonials = [
-  { quote: "DraftSendSign cut our contract turnaround time from 5 days to under 4 hours. Our legal team can't imagine going back.", name: "Sarah Chen", role: "General Counsel, TechCorp" },
-  { quote: "The template library alone saves us 10 hours a week. The signing experience is so smooth our clients actually comment on it.", name: "Marcus Rodriguez", role: "Managing Partner, Rodriguez & Associates" },
-  { quote: "We switched from DocuSign and saved 60% on costs while getting a better product. The audit trail features are incredible.", name: "Emily Watson", role: "VP Operations, GrowthCo" },
+interface PricingPlan {
+  name: string;
+  monthlyPrice: number | null;
+  annualPrice: number | null;
+  label: string;
+  features: string[];
+  popular?: boolean;
+  cta: string;
+}
+
+const PLANS: PricingPlan[] = [
+  {
+    name: "Starter",
+    monthlyPrice: null,
+    annualPrice: null,
+    label: "Free",
+    features: [
+      "3 documents/month",
+      "1 user",
+      "Basic audit trail",
+      "Email support",
+    ],
+    cta: "Start Free",
+  },
+  {
+    name: "Pro",
+    monthlyPrice: 12,
+    annualPrice: 10,
+    label: "$12/mo",
+    features: [
+      "50 documents/month",
+      "3 users",
+      "Full audit trail",
+      "Templates",
+      "Priority support",
+    ],
+    popular: true,
+    cta: "Start Free Trial",
+  },
+  {
+    name: "Team",
+    monthlyPrice: 29,
+    annualPrice: 23,
+    label: "$29/mo",
+    features: [
+      "200 documents/month",
+      "10 users",
+      "Mass signature campaigns",
+      "Advanced analytics",
+      "Priority support",
+    ],
+    cta: "Start Free Trial",
+  },
+  {
+    name: "Business",
+    monthlyPrice: 59,
+    annualPrice: 47,
+    label: "$59/mo",
+    features: [
+      "Unlimited documents",
+      "Unlimited users",
+      "SSO / SAML",
+      "Dedicated account manager",
+      "SLA guarantee",
+    ],
+    cta: "Start Free Trial",
+  },
 ];
+
+interface CompareRow {
+  feature: string;
+  dss: string | boolean;
+  docusign: string | boolean;
+}
+
+const COMPARE_ROWS: CompareRow[] = [
+  { feature: "Starting price", dss: "Free", docusign: "$15/mo" },
+  { feature: "Documents/month (base)", dss: "3 free, 50 on Pro", docusign: "5 on Standard" },
+  { feature: "Users included", dss: "Up to unlimited", docusign: "1 per plan" },
+  { feature: "Free trial", dss: true, docusign: false },
+  { feature: "Audit trail", dss: true, docusign: true },
+  { feature: "Mass signature campaigns", dss: true, docusign: false },
+];
+
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
+function Logo() {
+  return (
+    <span className="text-[17px] font-bold tracking-tight select-none">
+      Draft<span className="text-[#c8210d]">Send</span>Sign
+    </span>
+  );
+}
+
+/** Pure CSS/SVG app UI mockup — no external images */
+function HeroMockup() {
+  return (
+    <div className="mt-16 mx-auto max-w-3xl rounded-2xl overflow-hidden border border-white/10 shadow-[0_32px_80px_rgba(0,0,0,0.6)]">
+      {/* Browser chrome */}
+      <div className="flex items-center gap-2 bg-[#161b22] px-4 py-3 border-b border-white/5">
+        <span className="w-3 h-3 rounded-full bg-[#ff5f57]" />
+        <span className="w-3 h-3 rounded-full bg-[#febc2e]" />
+        <span className="w-3 h-3 rounded-full bg-[#28c840]" />
+        <span className="ml-4 flex-1 bg-[#0d1117] rounded px-3 py-1 text-xs text-white/30 font-mono">
+          app.draftsendsign.com
+        </span>
+      </div>
+
+      {/* App content */}
+      <div className="bg-[#0d1117] p-6 grid grid-cols-1 sm:grid-cols-5 gap-6">
+        {/* Sidebar stub */}
+        <div className="hidden sm:flex sm:col-span-1 flex-col gap-3">
+          {["Documents", "Templates", "Team", "Settings"].map((item, i) => (
+            <div
+              key={item}
+              className={`rounded-lg px-3 py-2 text-xs font-medium ${
+                i === 0
+                  ? "bg-[#c8210d]/20 text-[#c8210d]"
+                  : "text-white/30"
+              }`}
+            >
+              {item}
+            </div>
+          ))}
+        </div>
+
+        {/* Main panel */}
+        <div className="sm:col-span-4 space-y-4">
+          {/* Stats row */}
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: "Pending", value: "4", color: "text-yellow-400" },
+              { label: "Completed", value: "28", color: "text-green-400" },
+              { label: "Drafts", value: "2", color: "text-white/50" },
+            ].map((s) => (
+              <div
+                key={s.label}
+                className="rounded-xl bg-white/5 border border-white/5 p-3 text-center"
+              >
+                <p className={`text-xl font-bold ${s.color}`}>{s.value}</p>
+                <p className="text-[10px] text-white/30 mt-0.5">{s.label}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Document list */}
+          <div className="rounded-xl border border-white/5 overflow-hidden">
+            {[
+              { name: "NDA — Acme Corp", status: "Signed", color: "text-green-400 bg-green-900/30" },
+              { name: "Employment Offer — J. Smith", status: "Pending", color: "text-yellow-400 bg-yellow-900/30" },
+              { name: "Vendor Agreement", status: "Draft", color: "text-white/40 bg-white/5" },
+            ].map((doc, i) => (
+              <div
+                key={doc.name}
+                className={`flex items-center justify-between px-4 py-3 text-xs ${
+                  i !== 2 ? "border-b border-white/5" : ""
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <FileText className="h-3.5 w-3.5 text-white/30" />
+                  <span className="text-white/70">{doc.name}</span>
+                </div>
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${doc.color}`}
+                >
+                  {doc.status}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {/* Signature field highlight */}
+          <div className="rounded-xl border border-[#c8210d]/40 bg-[#c8210d]/5 p-3 flex items-center gap-3">
+            <div className="rounded-lg bg-[#c8210d]/20 p-2">
+              <PenTool className="h-4 w-4 text-[#c8210d]" />
+            </div>
+            <div className="flex-1">
+              <p className="text-xs font-semibold text-white/80">
+                Signature required
+              </p>
+              <p className="text-[10px] text-white/30">
+                Click to sign · John Smith
+              </p>
+            </div>
+            <div className="rounded-md bg-[#c8210d] px-3 py-1 text-[10px] font-bold text-white">
+              Sign
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PricingCard({
+  plan,
+  annual,
+}: {
+  plan: PricingPlan;
+  annual: boolean;
+}) {
+  const price =
+    plan.monthlyPrice === null
+      ? "Free"
+      : annual
+      ? `$${plan.annualPrice}`
+      : `$${plan.monthlyPrice}`;
+
+  return (
+    <div
+      className={`relative flex flex-col rounded-2xl border p-6 ${
+        plan.popular
+          ? "border-[#c8210d] shadow-[0_0_0_1px_#c8210d] bg-white"
+          : "border-gray-200 bg-white"
+      }`}
+    >
+      {plan.popular && (
+        <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
+          <span className="rounded-full bg-[#c8210d] px-3 py-1 text-[11px] font-bold text-white tracking-wide uppercase">
+            Most Popular
+          </span>
+        </div>
+      )}
+
+      <div className="mb-4">
+        <p className="text-sm font-semibold text-gray-500 mb-1">{plan.name}</p>
+        <div className="flex items-end gap-1">
+          <span className="text-4xl font-extrabold text-gray-900">{price}</span>
+          {plan.monthlyPrice !== null && (
+            <span className="text-sm text-gray-400 mb-1">/mo</span>
+          )}
+        </div>
+        {annual && plan.annualPrice !== null && (
+          <p className="text-xs text-green-600 font-medium mt-1">
+            Save 20% with annual billing
+          </p>
+        )}
+      </div>
+
+      <ul className="space-y-2.5 mb-6 flex-1">
+        {plan.features.map((f) => (
+          <li key={f} className="flex items-start gap-2 text-sm text-gray-600">
+            <Check className="h-4 w-4 text-[#c8210d] mt-0.5 shrink-0" />
+            <span>{f}</span>
+          </li>
+        ))}
+      </ul>
+
+      <a href="https://app.draftsendsign.com/#/signup">
+        <Button
+          className={`w-full ${
+            plan.popular
+              ? "bg-[#c8210d] hover:bg-[#a61b0b] text-white"
+              : "border border-gray-300 bg-white text-gray-800 hover:bg-gray-50"
+          }`}
+          variant={plan.popular ? "default" : "outline"}
+        >
+          {plan.cta}
+        </Button>
+      </a>
+    </div>
+  );
+}
+
+// ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function MarketingHome() {
+  const [annual, setAnnual] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
   return (
-    <div className="min-h-screen bg-background">
-      {/* Navbar */}
-      <nav className="fixed top-0 left-0 right-0 z-50 border-b bg-background/80 backdrop-blur-md">
-        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+    <div className="min-h-screen bg-white font-sans antialiased">
+
+      {/* ── Navbar ─────────────────────────────────────────────────────────── */}
+      <nav className="sticky top-0 z-50 border-b border-gray-200 bg-white/90 backdrop-blur-md">
+        <div className="mx-auto max-w-7xl px-5 sm:px-8 h-16 flex items-center justify-between">
           <Link href="/">
-            <div className="flex items-center gap-2.5 cursor-pointer">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#c8210d]">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6z" fill="white" opacity="0.9"/><path d="M14 2v6h6" fill="white" opacity="0.6"/><path d="M9 15l2 2 4-4" stroke="#c8210d" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-              </div>
-              <span className="text-lg font-bold">Draft<span className="text-[#c8210d]">Send</span>Sign</span>
-            </div>
+            <Logo />
           </Link>
-          <div className="hidden md:flex items-center gap-8">
-            <Link href="/features" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Features</Link>
-            <Link href="/pricing" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Pricing</Link>
-            <Link href="/security" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Security</Link>
-            <Link href="/about" className="text-sm text-muted-foreground hover:text-foreground transition-colors">About</Link>
+
+          {/* Desktop nav */}
+          <div className="hidden md:flex items-center gap-7">
+            {NAV_LINKS.map((l) => (
+              <a
+                key={l.label}
+                href={l.href}
+                className="text-sm text-gray-500 hover:text-gray-900 transition-colors"
+              >
+                {l.label}
+              </a>
+            ))}
           </div>
-          <div className="flex items-center gap-3">
-            <Link href="/login">
-              <Button variant="ghost" data-testid="nav-login">Sign In</Button>
-            </Link>
-            <Link href="/signup">
-              <Button className="bg-[#c8210d] hover:bg-[#a61b0b] text-white" data-testid="nav-signup">Start Free Trial</Button>
-            </Link>
+
+          <div className="hidden md:flex items-center gap-3">
+            <a href="https://app.draftsendsign.com/#/login">
+              <Button variant="ghost" size="sm" className="text-gray-600">
+                Sign In
+              </Button>
+            </a>
+            <a href="https://app.draftsendsign.com/#/signup">
+              <Button
+                size="sm"
+                className="bg-[#c8210d] hover:bg-[#a61b0b] text-white shadow-sm"
+              >
+                Start Free Trial
+              </Button>
+            </a>
           </div>
+
+          {/* Mobile menu button */}
+          <button
+            className="md:hidden p-2 text-gray-500 hover:text-gray-900"
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            aria-label="Toggle menu"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
         </div>
+
+        {/* Mobile menu */}
+        {mobileMenuOpen && (
+          <div className="md:hidden border-t border-gray-100 bg-white px-5 py-4 space-y-3">
+            {NAV_LINKS.map((l) => (
+              <a
+                key={l.label}
+                href={l.href}
+                className="block text-sm text-gray-600 hover:text-gray-900 py-1"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                {l.label}
+              </a>
+            ))}
+            <div className="pt-3 border-t border-gray-100 flex flex-col gap-2">
+              <a href="https://app.draftsendsign.com/#/login">
+                <Button variant="outline" size="sm" className="w-full">
+                  Sign In
+                </Button>
+              </a>
+              <a href="https://app.draftsendsign.com/#/signup">
+                <Button
+                  size="sm"
+                  className="w-full bg-[#c8210d] hover:bg-[#a61b0b] text-white"
+                >
+                  Start Free Trial
+                </Button>
+              </a>
+            </div>
+          </div>
+        )}
       </nav>
 
-      {/* Hero */}
-      <section className="hero-gradient pt-32 pb-20 md:pt-40 md:pb-32">
-        <div className="max-w-7xl mx-auto px-6 text-center">
-          <Badge className="mb-6 bg-[#c8210d]/10 text-[#c8210d] border-[#c8210d]/20 hover:bg-[#c8210d]/15">
-            Trusted by 10,000+ businesses
-          </Badge>
-          <h1 className="text-5xl md:text-7xl font-extrabold text-white mb-6 leading-tight">
-            Draft. Send. <span className="text-[#c8210d]">Sign.</span>
+      {/* ── Hero ───────────────────────────────────────────────────────────── */}
+      <section className="bg-[#0d1117] pt-20 pb-16 md:pt-28 md:pb-20">
+        <div className="mx-auto max-w-7xl px-5 sm:px-8 text-center">
+          <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-xs text-white/60 mb-8">
+            <Zap className="h-3.5 w-3.5 text-[#c8210d]" />
+            The affordable DocuSign alternative for small teams
+          </div>
+
+          <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-extrabold text-white leading-[1.08] tracking-tight mb-6">
+            Sign documents in{" "}
+            <span className="text-[#c8210d]">minutes</span>,<br className="hidden sm:block" />
+            {" "}not days
           </h1>
-          <p className="text-lg md:text-xl text-gray-400 max-w-2xl mx-auto mb-10">
-            Send legally binding agreements and collect signatures in minutes — not days.
-            The modern e-signature platform built for speed and security.
+
+          <p className="text-lg md:text-xl text-white/55 max-w-2xl mx-auto mb-10 leading-relaxed">
+            DraftSendSign is the affordable alternative to DocuSign. Send documents
+            for signature, track progress in real time, and get legally binding
+            signatures — starting free.
           </p>
+
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Link href="/signup">
-              <Button size="lg" className="bg-[#c8210d] hover:bg-[#a61b0b] text-white px-8 h-12 text-base glow-red" data-testid="hero-cta-trial">
-                Start Free Trial
+            <a href="https://app.draftsendsign.com/#/signup">
+              <Button
+                size="lg"
+                className="bg-[#c8210d] hover:bg-[#a61b0b] text-white px-8 h-12 text-base font-semibold shadow-lg shadow-[#c8210d]/30"
+              >
+                Start Free Trial — No Credit Card
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
-            </Link>
-            <Link href="/about">
-              <Button size="lg" variant="outline" className="px-8 h-12 text-base border-gray-600 text-gray-300 hover:bg-gray-800" data-testid="hero-cta-demo">
-                Request Demo
+            </a>
+            <a href="/#/features">
+              <Button
+                size="lg"
+                variant="outline"
+                className="px-8 h-12 text-base border-white/20 text-white/80 bg-transparent hover:bg-white/5"
+              >
+                See How It Works
               </Button>
-            </Link>
+            </a>
           </div>
-          {/* Mock Dashboard Preview */}
-          <div className="mt-16 max-w-4xl mx-auto rounded-xl border border-gray-700 bg-gray-900/50 shadow-2xl overflow-hidden">
-            <div className="h-8 bg-gray-800 flex items-center px-4 gap-2">
-              <div className="w-3 h-3 rounded-full bg-red-500" />
-              <div className="w-3 h-3 rounded-full bg-yellow-500" />
-              <div className="w-3 h-3 rounded-full bg-green-500" />
-              <span className="ml-4 text-xs text-gray-500">app.draftsendsign.com</span>
-            </div>
-            <div className="p-6 grid grid-cols-4 gap-4">
-              {[{ label: "Sent", value: "127" }, { label: "Pending", value: "23" }, { label: "Completed", value: "89" }, { label: "Drafts", value: "15" }].map(s => (
-                <div key={s.label} className="bg-gray-800/50 rounded-lg p-4 text-center">
-                  <p className="text-2xl font-bold text-white">{s.value}</p>
-                  <p className="text-xs text-gray-500">{s.label}</p>
+
+          <p className="mt-5 text-xs text-white/30 tracking-wide">
+            14-day free trial · No credit card required · Cancel anytime
+          </p>
+
+          {/* App mockup */}
+          <HeroMockup />
+        </div>
+      </section>
+
+      {/* ── Trust bar ──────────────────────────────────────────────────────── */}
+      <section className="border-b border-gray-100 bg-gray-50 py-6">
+        <div className="mx-auto max-w-7xl px-5 sm:px-8">
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            <span className="text-xs font-medium text-gray-400 uppercase tracking-widest mr-2">
+              Trusted for signing:
+            </span>
+            {TRUST_BADGES.map((badge) => (
+              <span
+                key={badge}
+                className="rounded-full border border-gray-200 bg-white px-4 py-1.5 text-xs font-medium text-gray-500 shadow-sm"
+              >
+                {badge}
+              </span>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── How it works ───────────────────────────────────────────────────── */}
+      <section id="features" className="py-24">
+        <div className="mx-auto max-w-7xl px-5 sm:px-8">
+          <div className="text-center mb-16">
+            <p className="text-xs font-bold uppercase tracking-widest text-[#c8210d] mb-3">
+              How it works
+            </p>
+            <h2 className="text-3xl md:text-4xl font-extrabold text-gray-900 mb-4">
+              Three simple steps
+            </h2>
+            <p className="text-gray-500 text-lg max-w-xl mx-auto">
+              Get your documents signed in minutes, not days.
+            </p>
+          </div>
+
+          <div className="relative grid md:grid-cols-3 gap-10">
+            {/* Connector line on desktop */}
+            <div className="hidden md:block absolute top-10 left-[calc(16.67%+1rem)] right-[calc(16.67%+1rem)] h-px bg-gray-200" />
+
+            {STEPS.map((step, i) => {
+              const Icon = step.icon;
+              return (
+                <div key={step.title} className="relative text-center">
+                  <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-2xl bg-[#0d1117] shadow-lg relative z-10">
+                    <Icon className="h-8 w-8 text-white" />
+                    <span className="absolute -top-2 -right-2 flex h-6 w-6 items-center justify-center rounded-full bg-[#c8210d] text-[11px] font-bold text-white shadow">
+                      {i + 1}
+                    </span>
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-900 mb-2">
+                    {step.title}
+                  </h3>
+                  <p className="text-gray-500 text-sm leading-relaxed max-w-xs mx-auto">
+                    {step.desc}
+                  </p>
                 </div>
-              ))}
-            </div>
-            <div className="px-6 pb-6">
-              <div className="bg-gray-800/30 rounded-lg p-4 space-y-3">
-                {["Non-Disclosure Agreement", "Employment Contract", "Service Agreement"].map((d, i) => (
-                  <div key={d} className="flex items-center justify-between py-2 border-b border-gray-700/50 last:border-0">
-                    <span className="text-sm text-gray-300">{d}</span>
-                    <Badge className={i === 0 ? "status-completed" : i === 1 ? "status-pending" : "status-draft"}>
-                      {i === 0 ? "Completed" : i === 1 ? "Pending" : "Draft"}
-                    </Badge>
-                  </div>
-                ))}
-              </div>
-            </div>
+              );
+            })}
           </div>
         </div>
       </section>
 
-      {/* How It Works */}
-      <section className="py-20 bg-background">
-        <div className="max-w-7xl mx-auto px-6">
+      {/* ── Features grid ──────────────────────────────────────────────────── */}
+      <section className="bg-gray-50 py-24">
+        <div className="mx-auto max-w-7xl px-5 sm:px-8">
           <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">Three simple steps</h2>
-            <p className="text-muted-foreground text-lg">Get documents signed in minutes, not days</p>
+            <p className="text-xs font-bold uppercase tracking-widest text-[#c8210d] mb-3">
+              Features
+            </p>
+            <h2 className="text-3xl md:text-4xl font-extrabold text-gray-900 mb-4">
+              Everything you need
+            </h2>
+            <p className="text-gray-500 text-lg max-w-xl mx-auto">
+              Powerful tools to run your entire document signing workflow.
+            </p>
           </div>
-          <div className="grid md:grid-cols-3 gap-8">
-            {steps.map((step, i) => (
-              <div key={step.title} className="text-center group">
-                <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-[#c8210d]/10 text-[#c8210d] group-hover:bg-[#c8210d] group-hover:text-white transition-colors">
-                  <step.icon className="h-7 w-7" />
-                </div>
-                <div className="text-sm font-bold text-[#c8210d] mb-2">Step {i + 1}</div>
-                <h3 className="text-xl font-bold mb-2">{step.title}</h3>
-                <p className="text-muted-foreground">{step.desc}</p>
-              </div>
-            ))}
+
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {FEATURES.map((f) => {
+              const Icon = f.icon;
+              return (
+                <Card
+                  key={f.title}
+                  className="border border-gray-200 shadow-none hover:shadow-md transition-shadow bg-white"
+                >
+                  <CardContent className="p-6">
+                    <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-[#0d1117]">
+                      <Icon className="h-5 w-5 text-white" />
+                    </div>
+                    <h3 className="font-semibold text-gray-900 mb-1.5">
+                      {f.title}
+                    </h3>
+                    <p className="text-sm text-gray-500 leading-relaxed">
+                      {f.desc}
+                    </p>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         </div>
       </section>
 
-      {/* Features */}
-      <section className="py-20 bg-muted/30">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">Everything you need</h2>
-            <p className="text-muted-foreground text-lg">Powerful features for modern document workflows</p>
-          </div>
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {features.map((f) => (
-              <Card key={f.title} className="border-0 shadow-sm hover:shadow-md transition-shadow">
-                <CardContent className="p-6">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#c8210d]/10 text-[#c8210d] mb-4">
-                    <f.icon className="h-5 w-5" />
-                  </div>
-                  <h3 className="font-semibold text-lg mb-2">{f.title}</h3>
-                  <p className="text-muted-foreground text-sm">{f.desc}</p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Use Cases */}
-      <section className="py-20 bg-background">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">Built for your industry</h2>
-            <p className="text-muted-foreground text-lg">Trusted by teams across every sector</p>
-          </div>
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {useCases.map((uc) => (
-              <Card key={uc.title} className="text-center border-0 shadow-sm">
-                <CardContent className="p-6">
-                  <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-[#c8210d]/10 text-[#c8210d]">
-                    <uc.icon className="h-6 w-6" />
-                  </div>
-                  <h3 className="font-semibold mb-2">{uc.title}</h3>
-                  <p className="text-muted-foreground text-sm">{uc.desc}</p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Security */}
-      <section className="py-20 bg-muted/30">
-        <div className="max-w-7xl mx-auto px-6">
+      {/* ── Pricing ────────────────────────────────────────────────────────── */}
+      <section id="pricing" className="py-24 bg-white">
+        <div className="mx-auto max-w-7xl px-5 sm:px-8">
           <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">Enterprise-grade security</h2>
-            <p className="text-muted-foreground text-lg">Your documents are protected at every step</p>
+            <p className="text-xs font-bold uppercase tracking-widest text-[#c8210d] mb-3">
+              Pricing
+            </p>
+            <h2 className="text-3xl md:text-4xl font-extrabold text-gray-900 mb-3">
+              Simple, transparent pricing
+            </h2>
+            <p className="text-gray-500 text-lg mb-8">
+              3x cheaper than DocuSign. No per-document fees.
+            </p>
+
+            {/* Annual toggle */}
+            <div className="inline-flex items-center gap-3 rounded-full border border-gray-200 bg-gray-50 px-5 py-2">
+              <span
+                className={`text-sm font-medium cursor-pointer ${
+                  !annual ? "text-gray-900" : "text-gray-400"
+                }`}
+                onClick={() => setAnnual(false)}
+              >
+                Monthly
+              </span>
+              <button
+                onClick={() => setAnnual(!annual)}
+                className={`relative h-6 w-11 rounded-full transition-colors ${
+                  annual ? "bg-[#c8210d]" : "bg-gray-300"
+                }`}
+                aria-label="Toggle annual billing"
+              >
+                <span
+                  className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                    annual ? "translate-x-5" : "translate-x-0"
+                  }`}
+                />
+              </button>
+              <span
+                className={`text-sm font-medium cursor-pointer ${
+                  annual ? "text-gray-900" : "text-gray-400"
+                }`}
+                onClick={() => setAnnual(true)}
+              >
+                Annual
+                <span className="ml-1.5 rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-bold text-green-700">
+                  Save 20%
+                </span>
+              </span>
+            </div>
           </div>
-          <div className="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto">
-            {[
-              { icon: Lock, title: "256-bit Encryption", desc: "All documents encrypted in transit and at rest" },
-              { icon: Shield, title: "Audit Trails", desc: "Complete, tamper-proof record of every action" },
-              { icon: FileCheck, title: "ESIGN & UETA", desc: "Fully compliant with US electronic signature laws" },
-            ].map((s) => (
-              <div key={s.title} className="text-center">
-                <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                  <s.icon className="h-6 w-6" />
-                </div>
-                <h3 className="font-semibold mb-2">{s.title}</h3>
-                <p className="text-muted-foreground text-sm">{s.desc}</p>
-              </div>
+
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5 items-start pt-4">
+            {PLANS.map((plan) => (
+              <PricingCard key={plan.name} plan={plan} annual={annual} />
             ))}
           </div>
         </div>
       </section>
 
-      {/* Pricing Preview */}
-      <section className="py-20 bg-background">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">Simple, transparent pricing</h2>
-            <p className="text-muted-foreground text-lg">Start free, upgrade as you grow</p>
+      {/* ── Comparison table ───────────────────────────────────────────────── */}
+      <section className="bg-gray-50 py-24">
+        <div className="mx-auto max-w-4xl px-5 sm:px-8">
+          <div className="text-center mb-12">
+            <p className="text-xs font-bold uppercase tracking-widest text-[#c8210d] mb-3">
+              Comparison
+            </p>
+            <h2 className="text-3xl md:text-4xl font-extrabold text-gray-900">
+              DraftSendSign vs DocuSign
+            </h2>
           </div>
-          <div className="grid md:grid-cols-3 gap-6 max-w-4xl mx-auto">
-            {plans.map((plan) => (
-              <Card key={plan.name} className={`relative ${plan.popular ? "border-[#c8210d] shadow-lg" : "border-border"}`}>
-                {plan.popular && (
-                  <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-[#c8210d] text-white">Most Popular</Badge>
-                )}
-                <CardContent className="p-6 text-center">
-                  <h3 className="font-bold text-lg mb-2">{plan.name}</h3>
-                  <p className="text-3xl font-extrabold mb-1">{plan.price}</p>
-                  {plan.price !== "Free" && <p className="text-xs text-muted-foreground mb-4">/month</p>}
-                  {plan.price === "Free" && <p className="text-xs text-muted-foreground mb-4">forever</p>}
-                  <div className="space-y-2 text-sm text-muted-foreground">
-                    <p>{plan.docs}</p>
-                    <p>{plan.users}</p>
-                  </div>
-                  <Link href="/signup">
-                    <Button className={`w-full mt-6 ${plan.popular ? "bg-[#c8210d] hover:bg-[#a61b0b] text-white" : ""}`} variant={plan.popular ? "default" : "outline"}>
-                      Get Started
-                    </Button>
-                  </Link>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-          <div className="text-center mt-8">
-            <Link href="/pricing" className="text-[#c8210d] hover:underline text-sm font-medium">
-              View full pricing comparison <ArrowRight className="inline h-3 w-3" />
-            </Link>
+
+          <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-100">
+                  <th className="py-4 pl-6 text-left text-gray-400 font-medium w-1/2">
+                    Feature
+                  </th>
+                  <th className="py-4 text-center font-bold text-gray-900">
+                    DraftSendSign
+                  </th>
+                  <th className="py-4 pr-6 text-center font-medium text-gray-400">
+                    DocuSign
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {COMPARE_ROWS.map((row, i) => (
+                  <tr
+                    key={row.feature}
+                    className={`border-b border-gray-50 last:border-0 ${
+                      i % 2 === 0 ? "bg-white" : "bg-gray-50/50"
+                    }`}
+                  >
+                    <td className="py-4 pl-6 text-gray-600">{row.feature}</td>
+                    <td className="py-4 text-center">
+                      {typeof row.dss === "boolean" ? (
+                        row.dss ? (
+                          <Check className="mx-auto h-5 w-5 text-green-500" />
+                        ) : (
+                          <X className="mx-auto h-5 w-5 text-red-400" />
+                        )
+                      ) : (
+                        <span className="font-semibold text-gray-900">
+                          {row.dss}
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-4 pr-6 text-center">
+                      {typeof row.docusign === "boolean" ? (
+                        row.docusign ? (
+                          <Check className="mx-auto h-5 w-5 text-green-500" />
+                        ) : (
+                          <X className="mx-auto h-5 w-5 text-red-400" />
+                        )
+                      ) : (
+                        <span className="text-gray-400">{row.docusign}</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       </section>
 
-      {/* Testimonials */}
-      <section className="py-20 bg-muted/30">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">Loved by teams everywhere</h2>
-          </div>
-          <div className="grid md:grid-cols-3 gap-6">
-            {testimonials.map((t) => (
-              <Card key={t.name} className="border-0 shadow-sm">
-                <CardContent className="p-6">
-                  <div className="flex gap-1 mb-4">
-                    {[...Array(5)].map((_, i) => (
-                      <Star key={i} className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                    ))}
-                  </div>
-                  <p className="text-sm text-muted-foreground mb-4 italic">"{t.quote}"</p>
-                  <div>
-                    <p className="font-semibold text-sm">{t.name}</p>
-                    <p className="text-xs text-muted-foreground">{t.role}</p>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* CTA */}
-      <section className="py-20 hero-gradient">
-        <div className="max-w-3xl mx-auto px-6 text-center">
-          <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">Ready to get started?</h2>
-          <p className="text-gray-400 text-lg mb-8">Join thousands of businesses that trust DraftSendSign for their document workflows.</p>
-          <Link href="/signup">
-            <Button size="lg" className="bg-[#c8210d] hover:bg-[#a61b0b] text-white px-8 h-12 glow-red">
-              Start Your Free Trial <ArrowRight className="ml-2 h-4 w-4" />
+      {/* ── Final CTA ──────────────────────────────────────────────────────── */}
+      <section className="bg-[#0d1117] py-24">
+        <div className="mx-auto max-w-3xl px-5 sm:px-8 text-center">
+          <h2 className="text-3xl md:text-5xl font-extrabold text-white mb-5 leading-tight">
+            Ready to ditch DocuSign?
+          </h2>
+          <p className="text-white/50 text-lg mb-10">
+            Start your 14-day free trial today. No credit card required.
+          </p>
+          <a href="https://app.draftsendsign.com/#/signup">
+            <Button
+              size="lg"
+              className="bg-[#c8210d] hover:bg-[#a61b0b] text-white px-10 h-14 text-lg font-bold shadow-xl shadow-[#c8210d]/30"
+            >
+              Start Your Free Trial
+              <ArrowRight className="ml-2 h-5 w-5" />
             </Button>
-          </Link>
+          </a>
+          <p className="mt-5 text-xs text-white/25 tracking-wide">
+            14-day free trial · No credit card required · Cancel anytime
+          </p>
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="border-t bg-background py-12">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="grid md:grid-cols-4 gap-8">
-            <div>
-              <div className="flex items-center gap-2 mb-4">
-                <div className="flex h-7 w-7 items-center justify-center rounded bg-[#c8210d]">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6z" fill="white" opacity="0.9"/></svg>
-                </div>
-                <span className="font-bold">Draft<span className="text-[#c8210d]">Send</span>Sign</span>
-              </div>
-              <p className="text-sm text-muted-foreground">The modern e-signature platform for fast-moving teams.</p>
+      {/* ── Footer ─────────────────────────────────────────────────────────── */}
+      <footer className="border-t border-gray-100 bg-white py-14">
+        <div className="mx-auto max-w-7xl px-5 sm:px-8">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-12">
+            {/* Brand */}
+            <div className="col-span-2 md:col-span-1">
+              <Link href="/">
+                <Logo />
+              </Link>
+              <p className="mt-3 text-sm text-gray-400 leading-relaxed max-w-[200px]">
+                Built for small teams. Priced for real businesses.
+              </p>
             </div>
+
+            {/* Product */}
             <div>
-              <h4 className="font-semibold mb-3 text-sm">Product</h4>
-              <div className="space-y-2 text-sm text-muted-foreground">
-                <Link href="/features" className="block hover:text-foreground">Features</Link>
-                <Link href="/pricing" className="block hover:text-foreground">Pricing</Link>
-                <Link href="/security" className="block hover:text-foreground">Security</Link>
+              <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-4">
+                Product
+              </p>
+              <div className="space-y-3 text-sm text-gray-500">
+                <a href="/#/features" className="block hover:text-gray-900 transition-colors">
+                  Features
+                </a>
+                <a href="/#/pricing" className="block hover:text-gray-900 transition-colors">
+                  Pricing
+                </a>
+                <a href="/#/security" className="block hover:text-gray-900 transition-colors">
+                  Security
+                </a>
               </div>
             </div>
+
+            {/* Company */}
             <div>
-              <h4 className="font-semibold mb-3 text-sm">Company</h4>
-              <div className="space-y-2 text-sm text-muted-foreground">
-                <Link href="/about" className="block hover:text-foreground">About</Link>
-                <span className="block">Careers</span>
-                <span className="block">Contact</span>
+              <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-4">
+                Company
+              </p>
+              <div className="space-y-3 text-sm text-gray-500">
+                <Link href="/about" className="block hover:text-gray-900 transition-colors">
+                  About
+                </Link>
+                <span className="block text-gray-300 cursor-default">
+                  Terms
+                </span>
+                <span className="block text-gray-300 cursor-default">
+                  Privacy
+                </span>
               </div>
             </div>
+
+            {/* Get started */}
             <div>
-              <h4 className="font-semibold mb-3 text-sm">Legal</h4>
-              <div className="space-y-2 text-sm text-muted-foreground">
-                <span className="block">Privacy Policy</span>
-                <span className="block">Terms of Service</span>
-                <span className="block">Cookie Policy</span>
+              <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-4">
+                Get Started
+              </p>
+              <div className="space-y-3">
+                <a href="https://app.draftsendsign.com/#/signup">
+                  <Button
+                    size="sm"
+                    className="w-full bg-[#c8210d] hover:bg-[#a61b0b] text-white"
+                  >
+                    Start Free Trial
+                  </Button>
+                </a>
+                <a href="https://app.draftsendsign.com/#/login">
+                  <Button size="sm" variant="outline" className="w-full mt-2">
+                    Sign In
+                  </Button>
+                </a>
               </div>
             </div>
           </div>
-          <div className="border-t mt-8 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
-            <p className="text-xs text-muted-foreground">2026 DraftSendSign. All rights reserved.</p>
+
+          <div className="border-t border-gray-100 pt-8 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <p className="text-xs text-gray-400">
+              © 2026 DraftSendSign. All rights reserved.
+            </p>
+            <p className="text-xs text-gray-300">
+              Built for small teams. Priced for real businesses.
+            </p>
           </div>
         </div>
       </footer>
