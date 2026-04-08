@@ -36,9 +36,53 @@ export default function Step4Send({ file, recipients, fields, documentId, setDoc
   const [sending, setSending] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<string | null>(null);
 
+  // Plan limits
+  const PLAN_LIMITS: Record<string, number> = {
+    starter: 3,
+    pro: Infinity,
+    team: Infinity,
+    business: Infinity,
+    enterprise: Infinity,
+  };
+
+  const checkUsageLimit = async (): Promise<{ allowed: boolean; used: number; limit: number }> => {
+    const plan = user?.plan || "starter";
+    const limit = PLAN_LIMITS[plan] ?? 3;
+    if (limit === Infinity) return { allowed: true, used: 0, limit };
+
+    // Count docs sent this calendar month
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+
+    const { count } = await supabase
+      .from("documents")
+      .select("*", { count: "exact", head: true })
+      .eq("sender_id", user?.id)
+      .neq("status", "draft")
+      .gte("created_at", startOfMonth.toISOString());
+
+    const used = count || 0;
+    return { allowed: used < limit, used, limit };
+  };
+
   const createAndSend = async (asDraft: boolean) => {
     setSending(true);
     try {
+      // Check usage limit before sending (not for drafts)
+      if (!asDraft) {
+        const { allowed, used, limit } = await checkUsageLimit();
+        if (!allowed) {
+          toast({
+            title: "Document limit reached",
+            description: `Your ${user?.plan || "starter"} plan allows ${limit} documents per month. You've used ${used}. Upgrade to send more.`,
+            variant: "destructive",
+          });
+          setSending(false);
+          return;
+        }
+      }
+
       // Step 1 — Upload PDF to Supabase Storage first
       let filePath: string | null = null;
       if (file?.fileObject && user?.id) {

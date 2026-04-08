@@ -1,5 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
+import { supabase } from "@/lib/supabase";
+import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -154,6 +156,23 @@ export default function Billing() {
   const showTrialBanner = (userPlan === "starter" || isTrialing) && daysLeft >= 0;
 
   const currentPlanDef = PLANS.find((p) => p.key === userPlan) || PLANS[0];
+
+  // Usage this month (for Starter plan)
+  const [docsUsed, setDocsUsed] = useState<number | null>(null);
+  const DOC_LIMIT = userPlan === "starter" ? 3 : null;
+
+  useEffect(() => {
+    if (!user?.id || userPlan !== "starter") return;
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1); startOfMonth.setHours(0, 0, 0, 0);
+    supabase
+      .from("documents")
+      .select("*", { count: "exact", head: true })
+      .eq("sender_id", user.id)
+      .neq("status", "draft")
+      .gte("created_at", startOfMonth.toISOString())
+      .then(({ count }) => setDocsUsed(count || 0));
+  }, [user?.id, userPlan]);
 
   // ---------------------------------------------------------------------------
   // Actions
@@ -385,6 +404,24 @@ export default function Billing() {
               </p>
             </div>
           </div>
+
+          {/* Usage meter — Starter plan only */}
+          {DOC_LIMIT !== null && docsUsed !== null && (
+            <div className="space-y-2 mt-4 pt-4 border-t">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Documents sent this month</span>
+                <span className={`font-semibold ${docsUsed >= DOC_LIMIT ? "text-red-600" : ""}`}>
+                  {docsUsed} / {DOC_LIMIT}
+                </span>
+              </div>
+              <Progress value={Math.min((docsUsed / DOC_LIMIT) * 100, 100)} className="h-2" />
+              {docsUsed >= DOC_LIMIT ? (
+                <p className="text-xs text-red-600 font-medium">Limit reached — upgrade to send more documents this month.</p>
+              ) : docsUsed >= DOC_LIMIT - 1 ? (
+                <p className="text-xs text-yellow-600">1 document remaining this month.</p>
+              ) : null}
+            </div>
+          )}
         </CardContent>
       </Card>
 
