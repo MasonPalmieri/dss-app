@@ -157,19 +157,15 @@ const PLANS: PricingPlan[] = [
   },
 ];
 
-interface CompareRow {
-  feature: string;
-  dss: string | boolean;
-  docusign: string | boolean;
-}
-
-const COMPARE_ROWS: CompareRow[] = [
-  { feature: "Starting price", dss: "Free", docusign: "$15/mo" },
-  { feature: "Documents/month (base)", dss: "3 free, 50 on Pro", docusign: "5 on Standard" },
-  { feature: "Users included", dss: "Up to unlimited", docusign: "1 per plan" },
-  { feature: "Free trial", dss: true, docusign: false },
-  { feature: "Audit trail", dss: true, docusign: true },
-  { feature: "Mass signature campaigns", dss: true, docusign: false },
+const FEATURE_ROWS = [
+  { feature: "Starting price", value: "Free — no credit card needed" },
+  { feature: "Documents/month (Starter)", value: "3 documents free" },
+  { feature: "Unlimited documents", value: "Pro plan — $12/mo" },
+  { feature: "Users included", value: "Up to 15 on Business" },
+  { feature: "14-day free trial", value: "All paid plans" },
+  { feature: "Audit trail", value: "Every plan" },
+  { feature: "Mass signature campaigns", value: "Team plan and above" },
+  { feature: "ESIGN Act compliant", value: "All plans" },
 ];
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -444,7 +440,7 @@ export default function MarketingHome() {
         <div className="mx-auto max-w-7xl px-5 sm:px-8 text-center">
           <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-xs text-white/60 mb-8">
             <Zap className="h-3.5 w-3.5 text-[#c8210d]" />
-            The affordable DocuSign alternative for small teams
+            The smarter way to get documents signed
           </div>
 
           <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-extrabold text-white leading-[1.08] tracking-tight mb-6">
@@ -454,7 +450,7 @@ export default function MarketingHome() {
           </h1>
 
           <p className="text-lg md:text-xl text-white/55 max-w-2xl mx-auto mb-10 leading-relaxed">
-            DraftSendSign is the affordable alternative to DocuSign. Send documents
+            DraftSendSign makes document signing simple and affordable. Send documents
             for signature, track progress in real time, and get legally binding
             signatures — starting free.
           </p>
@@ -602,7 +598,7 @@ export default function MarketingHome() {
               Simple, transparent pricing
             </h2>
             <p className="text-gray-500 text-lg mb-8">
-              3x cheaper than DocuSign. No per-document fees.
+              Simple pricing. No per-document fees. No surprises.
             </p>
 
             {/* Annual toggle */}
@@ -650,65 +646,30 @@ export default function MarketingHome() {
         </div>
       </section>
 
-      {/* ── Comparison table ───────────────────────────────────────────────── */}
+      {/* ── Feature highlights ──────────────────────────────────────── */}
       <section className="bg-gray-50 py-24">
-        <div className="mx-auto max-w-4xl px-5 sm:px-8">
+        <div className="mx-auto max-w-3xl px-5 sm:px-8">
           <div className="text-center mb-12">
-            <p className="text-xs font-bold uppercase tracking-widest text-[#c8210d] mb-3">
-              Comparison
-            </p>
-            <h2 className="text-3xl md:text-4xl font-extrabold text-gray-900">
-              DraftSendSign vs DocuSign
-            </h2>
+            <p className="text-xs font-bold uppercase tracking-widest text-[#c8210d] mb-3">What\'s included</p>
+            <h2 className="text-3xl md:text-4xl font-extrabold text-gray-900">What you get with DraftSendSign</h2>
           </div>
-
           <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-100">
-                  <th className="py-4 pl-6 text-left text-gray-400 font-medium w-1/2">
-                    Feature
-                  </th>
-                  <th className="py-4 text-center font-bold text-gray-900">
-                    DraftSendSign
-                  </th>
-                  <th className="py-4 pr-6 text-center font-medium text-gray-400">
-                    DocuSign
-                  </th>
+                  <th className="py-4 pl-6 text-left text-gray-400 font-medium w-1/2">Feature</th>
+                  <th className="py-4 pr-6 text-left font-bold text-gray-900">Details</th>
                 </tr>
               </thead>
               <tbody>
-                {COMPARE_ROWS.map((row, i) => (
-                  <tr
-                    key={row.feature}
-                    className={`border-b border-gray-50 last:border-0 ${
-                      i % 2 === 0 ? "bg-white" : "bg-gray-50/50"
-                    }`}
-                  >
+                {FEATURE_ROWS.map((row, i) => (
+                  <tr key={row.feature} className={`border-b border-gray-50 last:border-0 ${i % 2 === 0 ? "bg-white" : "bg-gray-50/50"}`}>
                     <td className="py-4 pl-6 text-gray-600">{row.feature}</td>
-                    <td className="py-4 text-center">
-                      {typeof row.dss === "boolean" ? (
-                        row.dss ? (
-                          <Check className="mx-auto h-5 w-5 text-green-500" />
-                        ) : (
-                          <X className="mx-auto h-5 w-5 text-red-400" />
-                        )
-                      ) : (
-                        <span className="font-semibold text-gray-900">
-                          {row.dss}
-                        </span>
-                      )}
-                    </td>
-                    <td className="py-4 pr-6 text-center">
-                      {typeof row.docusign === "boolean" ? (
-                        row.docusign ? (
-                          <Check className="mx-auto h-5 w-5 text-green-500" />
-                        ) : (
-                          <X className="mx-auto h-5 w-5 text-red-400" />
-                        )
-                      ) : (
-                        <span className="text-gray-400">{row.docusign}</span>
-                      )}
+                    <td className="py-4 pr-6">
+                      <span className="flex items-center gap-2 font-semibold text-gray-900">
+                        <Check className="h-4 w-4 text-green-500 shrink-0" />
+                        {row.value}
+                      </span>
                     </td>
                   </tr>
                 ))}
@@ -718,11 +679,11 @@ export default function MarketingHome() {
         </div>
       </section>
 
-      {/* ── Final CTA ──────────────────────────────────────────────────────── */}
+            {/* ── Final CTA ──────────────────────────────────────────────────────── */}
       <section className="bg-[#0d1117] py-24">
         <div className="mx-auto max-w-3xl px-5 sm:px-8 text-center">
           <h2 className="text-3xl md:text-5xl font-extrabold text-white mb-5 leading-tight">
-            Ready to ditch DocuSign?
+            Ready to simplify document signing?
           </h2>
           <p className="text-white/50 text-lg mb-10">
             Start your 14-day free trial today. No credit card required.

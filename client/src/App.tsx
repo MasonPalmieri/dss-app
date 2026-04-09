@@ -44,6 +44,9 @@ import PrivacyPage from "@/pages/legal/privacy";
 import MassSignature from "@/pages/app/mass-signature";
 import MassSignPage from "@/pages/mass-sign";
 
+// AI Generator
+import AiGenerator from "@/pages/app/ai-generator";
+
 import NotFound from "@/pages/not-found";
 
 const PUBLIC_PATHS = ["/", "/pricing", "/features", "/security", "/about", "/login", "/signup", "/forgot-password", "/reset-password", "/terms", "/privacy"];
@@ -60,6 +63,7 @@ function isAppPath(path: string): boolean {
     "/dashboard", "/documents", "/new-document", "/templates",
     "/contacts", "/teams", "/audit-logs", "/integrations",
     "/billing", "/settings", "/notifications", "/mass-signature",
+    "/ai-generator",
   ];
   return appPaths.some(p => path === p || path.startsWith(p + "/"));
 }
@@ -80,6 +84,7 @@ function AppRoutes() {
       <Route path="/settings" component={Settings} />
       <Route path="/notifications" component={Notifications} />
       <Route path="/mass-signature" component={MassSignature} />
+      <Route path="/ai-generator" component={AiGenerator} />
     </Switch>
   );
 }

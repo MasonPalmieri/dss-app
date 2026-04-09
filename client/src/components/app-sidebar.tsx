@@ -28,6 +28,7 @@ import {
   LogOut,
   ChevronUp,
   QrCode,
+  Sparkles,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -41,6 +42,7 @@ const navItems = [
   { label: "Dashboard", icon: LayoutDashboard, href: "/dashboard" },
   { label: "Documents", icon: FileText, href: "/documents" },
   { label: "Templates", icon: FolderOpen, href: "/templates" },
+  { label: "AI Generator", icon: Sparkles, href: "/ai-generator", highlight: true },
   { label: "Mass Signature", icon: QrCode, href: "/mass-signature", highlight: true },
   { label: "Contacts", icon: Users, href: "/contacts" },
   { label: "Teams", icon: UserPlus, href: "/teams" },

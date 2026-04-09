@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Upload, FileText, X, Zap } from "lucide-react";
@@ -18,6 +18,27 @@ interface Props {
 }
 
 export default function Step1Upload({ file, setFile, onNext }: Props) {
+  useEffect(() => {
+    const stored = sessionStorage.getItem('ai-generated-doc');
+    if (stored) {
+      try {
+        const { name, content, pages } = JSON.parse(stored);
+        sessionStorage.removeItem('ai-generated-doc');
+        // Create a text blob representing the document
+        const blob = new Blob([content], { type: 'text/plain' });
+        const fileObj = new File([blob], name || 'AI-Generated-Agreement.pdf', { type: 'application/pdf' });
+        setFile({
+          name: name || 'AI-Generated-Agreement.pdf',
+          size: `${(blob.size / 1024).toFixed(1)} KB`,
+          pages: pages || 1,
+          fileObject: fileObj,
+        });
+        // Auto-advance to step 2 after a brief moment
+        setTimeout(() => onNext(), 300);
+      } catch {}
+    }
+  }, []);
+
   const processFile = useCallback(async (f: File) => {
     let pages = 1;
     try {
