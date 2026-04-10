@@ -83,23 +83,33 @@ export default function Step4Send({ file, recipients, fields, documentId, setDoc
         }
       }
 
-      // Step 1 — Upload PDF to Supabase Storage first
+      // Step 1 — Upload PDF to Supabase Storage (with 30s timeout)
       let filePath: string | null = null;
       if (file?.fileObject && user?.id) {
         setUploadProgress("Uploading document...");
-        const safeName = file.name.replace(/\s+/g, "_");
-        const path = `${user.id}/${Date.now()}-${safeName}`;
-        const { data: uploadData, error: uploadError } = await supabase.storage
-          .from("documents")
-          .upload(path, file.fileObject, {
-            contentType: "application/pdf",
-            upsert: false,
-          });
-        if (uploadError) {
-          console.warn("PDF upload failed:", uploadError.message);
-          // Non-blocking — continue without storage if upload fails
-        } else if (uploadData) {
-          filePath = uploadData.path;
+        try {
+          const safeName = file.name.replace(/\s+/g, "_").replace(/[^a-zA-Z0-9._-]/g, "");
+          const path = `${user.id}/${Date.now()}-${safeName}`;
+          const uploadPromise = supabase.storage
+            .from("documents")
+            .upload(path, file.fileObject, {
+              contentType: "application/pdf",
+              upsert: false,
+            });
+          const timeoutPromise = new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error("Upload timed out after 30s")), 30000)
+          );
+          const result = await Promise.race([uploadPromise, timeoutPromise]) as any;
+          if (result?.error) {
+            console.warn("PDF upload failed:", result.error.message);
+            toast({ title: "Storage upload failed", description: "Document will be sent without cloud storage. " + result.error.message, variant: "destructive" });
+          } else if (result?.data) {
+            filePath = result.data.path;
+          }
+        } catch (uploadErr: any) {
+          console.warn("PDF upload error:", uploadErr.message);
+          // Non-blocking — continue sending even if storage fails
+          toast({ title: "Upload warning", description: "Could not upload to storage: " + uploadErr.message + ". Continuing without storage.", variant: "destructive" });
         }
         setUploadProgress(null);
       }

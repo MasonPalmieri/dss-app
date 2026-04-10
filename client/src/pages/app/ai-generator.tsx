@@ -663,9 +663,8 @@ function Step4({
 }
 
 // ─── Generated document view ──────────────────────────────────────────────────
-
 function GeneratedDocument({
-  documentText,
+  documentText: initialText,
   documentType,
   form,
   onRegenerate,
@@ -681,27 +680,21 @@ function GeneratedDocument({
   const { user } = useAuth();
   const { toast } = useToast();
   const [savingTemplate, setSavingTemplate] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedText, setEditedText] = useState(initialText);
+  const [isPolishing, setIsPolishing] = useState(false);
 
-  const wordCount = documentText
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean).length;
+  const wordCount = editedText.trim().split(/\s+/).filter(Boolean).length;
+
+  const docName = form.documentType === "Other" ? form.customDocumentType : form.documentType;
 
   const handleSendForSignature = () => {
-    const pages = Math.ceil(documentText.length / 3000);
-    const docName =
-      form.documentType === "Other"
-        ? form.customDocumentType
-        : form.documentType;
-
-    sessionStorage.setItem(
-      "ai-generated-doc",
-      JSON.stringify({
-        name: `${docName}.pdf`,
-        content: documentText,
-        pages: pages || 1,
-      })
-    );
+    const pages = Math.ceil(editedText.length / 3000);
+    sessionStorage.setItem("ai-generated-doc", JSON.stringify({
+      name: `${docName}.pdf`,
+      content: editedText,
+      pages: pages || 1,
+    }));
     navigate("/new-document");
   };
 
@@ -709,105 +702,111 @@ function GeneratedDocument({
     if (!user) return;
     setSavingTemplate(true);
     try {
-      const docName =
-        form.documentType === "Other"
-          ? form.customDocumentType
-          : form.documentType;
       await mockApi.createTemplate({
         name: docName,
         description: `AI-generated ${docName}`,
         creatorId: user.id,
         fileName: `${docName}.pdf`,
       });
-      toast({
-        title: "Template saved",
-        description: `"${docName}" has been saved to your templates.`,
-      });
+      toast({ title: "Template saved", description: `"${docName}" has been saved to your templates.` });
     } catch {
-      toast({
-        title: "Error saving template",
-        description: "Something went wrong. Please try again.",
-        variant: "destructive",
-      });
+      toast({ title: "Error saving template", description: "Something went wrong.", variant: "destructive" });
     } finally {
       setSavingTemplate(false);
+    }
+  };
+
+  const handleAiPolish = async () => {
+    setIsPolishing(true);
+    try {
+      const res = await fetch("/api/generate-document", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          documentType: form.documentType,
+          parties: form.parties.map(p => `${p.name} (${p.role})`).join(", "),
+          purpose: editedText, // Use the current edited text as context
+          terms: form.terms,
+          jurisdiction: form.jurisdiction,
+          effectiveDate: form.effectiveDate,
+          additionalDetails: `Please improve and clean up the following draft document while preserving all legal content and structure. Fix grammar, improve clarity, and make the language more professional:\n\n${editedText}`,
+        }),
+      });
+      const data = await res.json();
+      if (data.document) {
+        setEditedText(data.document);
+        toast({ title: "Document polished", description: "AI has improved the language and clarity." });
+      }
+    } catch {
+      toast({ title: "Polish failed", description: "Could not reach AI. Try again.", variant: "destructive" });
+    } finally {
+      setIsPolishing(false);
     }
   };
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <Sparkles className="h-4 w-4 text-[#c8210d]" />
-            <Badge
-              variant="outline"
-              className="text-[10px] border-[#c8210d]/30 text-[#c8210d]"
-            >
-              AI Generated
-            </Badge>
+            <Badge variant="outline" className="text-[10px] border-[#c8210d]/30 text-[#c8210d]">AI Generated</Badge>
           </div>
           <h2 className="text-2xl font-bold">{documentType}</h2>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {wordCount.toLocaleString()} words
-          </p>
+          <p className="text-sm text-muted-foreground mt-0.5">{wordCount.toLocaleString()} words</p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={onRegenerate}
-          className="shrink-0"
-        >
-          <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
-          Regenerate
-        </Button>
+        <div className="flex gap-2 flex-wrap">
+          <Button variant="outline" size="sm" onClick={handleAiPolish} disabled={isPolishing}>
+            {isPolishing ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5 mr-1.5" />}
+            {isPolishing ? "Polishing..." : "AI Polish"}
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setIsEditing(e => !e)}>
+            {isEditing ? "Preview" : "Edit"}
+          </Button>
+          <Button variant="outline" size="sm" onClick={onRegenerate}>
+            <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+            Regenerate
+          </Button>
+        </div>
       </div>
 
-      {/* Document preview */}
-      <div
-        className="border border-border rounded-xl bg-white dark:bg-zinc-50 overflow-auto"
-        style={{ maxHeight: "60vh" }}
-      >
-        <div className="px-12 py-10 min-w-0">
-          <pre
-            className="whitespace-pre-wrap font-serif text-sm leading-relaxed text-gray-900"
-            style={{ fontFamily: "Georgia, 'Times New Roman', Times, serif" }}
-          >
-            {documentText}
-          </pre>
+      {/* Document — editable or preview */}
+      {isEditing ? (
+        <div>
+          <p className="text-xs text-muted-foreground mb-2">Edit the document directly below. Click "Preview" to see the formatted version.</p>
+          <Textarea
+            value={editedText}
+            onChange={e => setEditedText(e.target.value)}
+            className="min-h-[60vh] font-mono text-sm"
+            style={{ fontFamily: "Georgia, 'Times New Roman', Times, serif", fontSize: 13, lineHeight: 1.7 }}
+          />
         </div>
-      </div>
+      ) : (
+        <div className="border border-border rounded-xl bg-white dark:bg-zinc-50 overflow-auto" style={{ maxHeight: "60vh" }}>
+          <div className="px-12 py-10 min-w-0">
+            <pre className="whitespace-pre-wrap font-serif text-sm leading-relaxed text-gray-900"
+              style={{ fontFamily: "Georgia, 'Times New Roman', Times, serif" }}>
+              {editedText}
+            </pre>
+          </div>
+        </div>
+      )}
 
       {/* Actions */}
       <div className="flex flex-col sm:flex-row gap-3">
-        <Button
-          className="flex-1 bg-[#c8210d] hover:bg-[#a61b0b] text-white font-semibold"
-          onClick={handleSendForSignature}
-        >
+        <Button className="flex-1 bg-[#c8210d] hover:bg-[#a61b0b] text-white font-semibold" onClick={handleSendForSignature}>
           <Send className="h-4 w-4 mr-2" />
           Send for Signature
         </Button>
-        <Button
-          variant="outline"
-          className="flex-1"
-          onClick={handleSaveAsTemplate}
-          disabled={savingTemplate}
-        >
-          {savingTemplate ? (
-            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-          ) : (
-            <FolderOpen className="h-4 w-4 mr-2" />
-          )}
+        <Button variant="outline" className="flex-1" onClick={handleSaveAsTemplate} disabled={savingTemplate}>
+          {savingTemplate ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FolderOpen className="h-4 w-4 mr-2" />}
           Save as Template
         </Button>
       </div>
 
       <div className="text-center">
-        <button
-          onClick={onReset}
-          className="text-xs text-muted-foreground hover:text-foreground transition-colors underline-offset-2 hover:underline"
-        >
+        <button onClick={onReset} className="text-xs text-muted-foreground hover:text-foreground transition-colors underline-offset-2 hover:underline">
           Start over with a new document
         </button>
       </div>

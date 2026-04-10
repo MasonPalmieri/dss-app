@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Upload, FileText, X, Zap } from "lucide-react";
@@ -39,7 +39,19 @@ export default function Step1Upload({ file, setFile, onNext }: Props) {
     }
   }, []);
 
+  const [fileError, setFileError] = useState<string | null>(null);
+
   const processFile = useCallback(async (f: File) => {
+    setFileError(null);
+
+    // Only accept PDF files
+    const isPdf = f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf');
+    if (!isPdf) {
+      const ext = f.name.split('.').pop()?.toUpperCase() || 'this format';
+      setFileError(`${ext} files are not supported. Please upload a PDF. If you have a Word document, export it as PDF first (File → Save As → PDF).`);
+      return;
+    }
+
     let pages = 1;
     try {
       const pdfjsLib = await import('pdfjs-dist');
@@ -82,8 +94,16 @@ export default function Step1Upload({ file, setFile, onNext }: Props) {
                 <h3 className="text-base font-semibold mb-1">Upload your document</h3>
                 <p className="text-sm text-muted-foreground mb-4">Drag & drop a PDF, or click to browse</p>
                 <Button variant="outline" size="sm">Browse Files</Button>
-                <input id="file-input" type="file" accept=".pdf,.doc,.docx" className="hidden" onChange={handleFileInput} />
+                <input id="file-input" type="file" accept=".pdf" className="hidden" onChange={handleFileInput} />
               </div>
+
+              {/* File type error */}
+              {fileError && (
+                <div className="flex items-start gap-3 p-4 rounded-lg border border-destructive/40 bg-destructive/5 text-sm text-destructive">
+                  <span className="shrink-0 mt-0.5">⚠️</span>
+                  <span>{fileError}</span>
+                </div>
+              )}
 
               {/* Demo shortcut */}
               <div>

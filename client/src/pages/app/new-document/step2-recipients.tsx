@@ -40,15 +40,17 @@ export default function Step2Recipients({ recipients, addRecipient, addRecipient
   };
 
   const moveRecipient = (id: string, direction: "up" | "down") => {
-    const idx = recipients.findIndex(r => r.id === id);
+    const sorted = [...recipients].sort((a, b) => a.order - b.order);
+    const idx = sorted.findIndex(r => r.id === id);
     if (direction === "up" && idx === 0) return;
-    if (direction === "down" && idx === recipients.length - 1) return;
+    if (direction === "down" && idx === sorted.length - 1) return;
     const newIdx = direction === "up" ? idx - 1 : idx + 1;
-    // Swap orders
-    const a = recipients[idx];
-    const b = recipients[newIdx];
-    updateRecipient(a.id, { order: b.order });
-    updateRecipient(b.id, { order: a.order });
+    // Swap positions in the sorted array
+    const tmp = sorted[idx];
+    sorted[idx] = sorted[newIdx];
+    sorted[newIdx] = tmp;
+    // Reassign clean sequential order values
+    sorted.forEach((r, i) => updateRecipient(r.id, { order: i + 1 }));
   };
 
   const sorted = [...recipients].sort((a, b) => a.order - b.order);
