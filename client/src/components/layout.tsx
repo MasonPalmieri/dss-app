@@ -35,6 +35,18 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <div className="flex-1 overflow-auto p-6">
           {children}
         </div>
+        {/* PalmWeb attribution */}
+        <div className="border-t px-6 py-2.5 flex items-center justify-center gap-1.5" style={{ borderColor: 'rgba(0,0,0,0.06)' }}>
+          <span style={{ fontSize: 10, color: 'rgba(0,0,0,0.28)', letterSpacing: '.01em', display: 'flex', alignItems: 'center', gap: 5 }}>
+            <span style={{ fontSize: 13 }}>🌴</span>
+            Website by{' '}
+            <a href="https://palmweb.net" target="_blank" rel="noopener noreferrer"
+              style={{ color: 'rgba(0,0,0,0.38)', textDecoration: 'underline', textUnderlineOffset: 2 }}>PalmWeb</a>
+            &nbsp;&middot;&nbsp;
+            <a href="mailto:mason@palmweb.net"
+              style={{ color: 'rgba(0,0,0,0.38)', textDecoration: 'underline', textUnderlineOffset: 2 }}>mason@palmweb.net</a>
+          </span>
+        </div>
       </SidebarInset>
     </SidebarProvider>
   );
