@@ -1,7 +1,39 @@
 // Uses OpenAI API to generate a legal document
 // This key needs to be replaced with a real key — use placeholder for now
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY || 'sk-placeholder';
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY || 'OPENAI_KEY_REDACTED';
 const APP_URL = 'https://app.draftsendsign.com';
+const SUPABASE_URL = 'https://aqlisniihrcazgxhqgki.supabase.co';
+const SUPABASE_SERVICE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFxbGlzbmlpaHJjYXpneGhxZ2tpIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MzE1MDE0MywiZXhwIjoyMDg4NzI2MTQzfQ.Fyhak2OxvE8uLU25RcHog4QIGjUOJ5KK4WTik2V6Uq0';
+
+// Monthly AI generation limits per plan
+const AI_LIMITS = { starter: 0, pro: 0, team: 20, business: 50, enterprise: 999 };
+
+async function getAiUsage(userId) {
+  const startOfMonth = new Date();
+  startOfMonth.setDate(1); startOfMonth.setHours(0,0,0,0);
+  const res = await fetch(
+    `${SUPABASE_URL}/rest/v1/audit_logs?user_id=eq.${userId}&action=eq.ai_document_generated&created_at=gte.${startOfMonth.toISOString()}&select=id`,
+    { headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`, Prefer: 'count=exact' } }
+  );
+  const count = parseInt(res.headers.get('content-range')?.split('/')[1] || '0', 10);
+  return count;
+}
+
+async function logAiUsage(userId) {
+  await fetch(`${SUPABASE_URL}/rest/v1/audit_logs`, {
+    method: 'POST',
+    headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+    body: JSON.stringify({ user_id: userId, action: 'ai_document_generated', actor_name: 'AI Generator', actor_email: 'system@draftsendsign.com', ip_address: '0.0.0.0', document_id: 1, metadata: { timestamp: new Date().toISOString() } }),
+  });
+}
+
+async function getUserPlan(userId) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}&select=plan`, {
+    headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` }
+  });
+  const data = await res.json();
+  return data[0]?.plan || 'starter';
+}
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', APP_URL);
@@ -10,7 +42,20 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { documentType, parties, purpose, terms, jurisdiction, effectiveDate, additionalDetails } = req.body;
+  const { documentType, parties, purpose, terms, jurisdiction, effectiveDate, additionalDetails, userId } = req.body;
+
+  // Check AI generation limit if userId provided
+  if (userId) {
+    const plan = await getUserPlan(userId);
+    const limit = AI_LIMITS[plan] ?? 0;
+    if (limit === 0) {
+      return res.status(403).json({ error: 'ai_not_available', message: 'AI Document Generator requires Team plan or above.' });
+    }
+    const used = await getAiUsage(userId);
+    if (used >= limit) {
+      return res.status(429).json({ error: 'ai_limit_reached', message: `You\'ve used all ${limit} AI generations for this month. Resets on the 1st.`, used, limit });
+    }
+  }
 
   if (!parties || !purpose) {
     return res.status(400).json({ error: 'Missing required fields' });
@@ -62,6 +107,8 @@ export default async function handler(req, res) {
     const documentText = data.choices[0]?.message?.content || '';
     const detectedType = detectDocumentType(documentType, purpose);
 
+    // Log usage for rate limiting
+    if (userId) await logAiUsage(userId).catch(() => {});
     return res.status(200).json({ document: documentText, documentType: detectedType });
   } catch (err) {
     return res.status(500).json({ error: err.message });

@@ -869,12 +869,16 @@ function AiGeneratorContent() {
           jurisdiction: form.jurisdiction || undefined,
           effectiveDate: form.effectiveDate || undefined,
           additionalDetails: form.additionalDetails || undefined,
+          userId: user?.id,
         }),
       });
 
       if (!response.ok) {
         const err = await response.json().catch(() => ({ error: "Unknown error" }));
-        throw new Error(err.error || `Request failed (${response.status})`);
+        if (response.status === 429 && err.error === 'ai_limit_reached') {
+          throw new Error(`Monthly limit reached: ${err.message}`);
+        }
+        throw new Error(err.message || err.error || `Request failed (${response.status})`);
       }
 
       const data = await response.json();
