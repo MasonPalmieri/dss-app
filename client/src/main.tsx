@@ -4,7 +4,7 @@ import App from "./App";
 import "./index.css";
 
 Sentry.init({
-  dsn: "https://a1b2c3d4e5f6@o0.ingest.sentry.io/0", // Replace with real DSN from sentry.io
+  dsn: "https://a2181d46ad751a341a93d8efab226c77@o4511224410996736.ingest.us.sentry.io/4511224421416960",
   environment: import.meta.env.MODE,
   enabled: import.meta.env.PROD, // Only track errors in production, not local dev
   tracesSampleRate: 0.2, // 20% of transactions for performance monitoring
