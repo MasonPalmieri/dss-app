@@ -833,6 +833,7 @@ export default function AiGenerator() {
 }
 
 function AiGeneratorContent() {
+  const { user } = useAuth();
   const [step, setStep] = useState(1);
   const [form, setForm] = useState<FormData>(DEFAULT_FORM);
   const [isGenerating, setIsGenerating] = useState(false);

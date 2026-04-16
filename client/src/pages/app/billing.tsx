@@ -161,8 +161,18 @@ export default function Billing() {
   // ---------------------------------------------------------------------------
   // Actions
   // ---------------------------------------------------------------------------
+  const [additionalUsers, setAdditionalUsers] = useState(0);
+  const [showUserSelector, setShowUserSelector] = useState(false);
+
   const handleUpgrade = async (planKey: PlanKey, isAnnual: boolean) => {
     if (!user) return;
+
+    // For Business plan, show user count selector first
+    if (planKey === 'business' && !showUserSelector) {
+      setShowUserSelector(true);
+      return;
+    }
+    setShowUserSelector(false);
     setUpgrading(planKey);
 
     try {
@@ -174,6 +184,7 @@ export default function Billing() {
           userId: user.id,
           userEmail: user.email,
           annual: isAnnual,
+          additionalUsers: planKey === 'business' ? additionalUsers : 0,
         }),
       });
 
@@ -510,6 +521,47 @@ export default function Billing() {
       </Card>
 
       {/* Enterprise Contact Modal */}
+      {/* Business user count selector */}
+      <Dialog open={showUserSelector} onOpenChange={setShowUserSelector}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>How many additional users?</DialogTitle>
+            <DialogDescription>
+              The Business plan includes 1 admin account at $19.99/month. Each additional user is $2.99/month.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4 space-y-4">
+            <div className="flex items-center gap-4 justify-center">
+              <button
+                className="h-9 w-9 rounded-full border text-lg font-bold hover:bg-muted transition-colors"
+                onClick={() => setAdditionalUsers(Math.max(0, additionalUsers - 1))}
+              >−</button>
+              <div className="text-center">
+                <div className="text-4xl font-extrabold">{additionalUsers}</div>
+                <div className="text-xs text-muted-foreground mt-1">additional users</div>
+              </div>
+              <button
+                className="h-9 w-9 rounded-full border text-lg font-bold hover:bg-muted transition-colors"
+                onClick={() => setAdditionalUsers(additionalUsers + 1)}
+              >+</button>
+            </div>
+            <div className="bg-muted/40 rounded-lg p-3 text-sm text-center">
+              Total: <strong>${(19.99 + additionalUsers * 2.99).toFixed(2)}/month</strong>
+              <span className="text-muted-foreground"> · 1 admin + {additionalUsers} user{additionalUsers !== 1 ? 's' : ''}</span>
+            </div>
+          </div>
+          <DialogFooter>
+            <button className="text-sm text-muted-foreground hover:text-foreground" onClick={() => setShowUserSelector(false)}>Cancel</button>
+            <Button
+              className="bg-[#c8210d] hover:bg-[#a61b0b] text-white"
+              onClick={() => handleUpgrade('business' as PlanKey, annual)}
+            >
+              Continue to Checkout
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={showEnterpriseModal} onOpenChange={setShowEnterpriseModal}>
         <DialogContent>
           <DialogHeader>

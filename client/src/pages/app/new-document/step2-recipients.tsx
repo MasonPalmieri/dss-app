@@ -20,12 +20,13 @@ interface Props {
   addRecipientFromContact: (name: string, email: string) => void;
   removeRecipient: (id: string) => void;
   updateRecipient: (id: string, updates: Partial<WizardRecipient>) => void;
+  enforceOrder: boolean;
+  setEnforceOrder: (v: boolean) => void;
   onNext: () => void;
   onBack: () => void;
 }
 
-export default function Step2Recipients({ recipients, addRecipient, addRecipientFromContact, removeRecipient, updateRecipient, onNext, onBack }: Props) {
-  const [enforceOrder, setEnforceOrder] = useState(false);
+export default function Step2Recipients({ recipients, addRecipient, addRecipientFromContact, removeRecipient, updateRecipient, enforceOrder, setEnforceOrder, onNext, onBack }: Props) {
   const [showContacts, setShowContacts] = useState(false);
   const { user } = useAuth();
 

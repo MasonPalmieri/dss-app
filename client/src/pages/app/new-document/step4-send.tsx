@@ -22,11 +22,12 @@ interface Props {
   fields: PlacedField[];
   documentId: number | null;
   setDocumentId: (id: number | null) => void;
+  enforceOrder?: boolean;
   onBack: () => void;
   onDone: () => void;
 }
 
-export default function Step4Send({ file, recipients, fields, documentId, setDocumentId, onBack, onDone }: Props) {
+export default function Step4Send({ file, recipients, fields, documentId, setDocumentId, enforceOrder = false, onBack, onDone }: Props) {
   const { user } = useAuth();
   const { toast } = useToast();
   const [subject, setSubject] = useState(file?.name?.replace(/\.pdf$/i, "") || "Please sign this document");
@@ -124,7 +125,12 @@ export default function Step4Send({ file, recipients, fields, documentId, setDoc
         subject,
         message,
         reminderFrequency,
-        expiresAt: expiresAt ? new Date(expiresAt) : undefined,
+        // Set expiry to end of day (23:59:59) in the user's local timezone
+        expiresAt: expiresAt ? (() => {
+          const d = new Date(expiresAt);
+          d.setHours(23, 59, 59, 999);
+          return d;
+        })() : undefined,
         status: "draft",
         tags: [],
       });
@@ -168,7 +174,14 @@ export default function Step4Send({ file, recipients, fields, documentId, setDoc
         const createdRecipients = await mockApi.getRecipients(doc.id);
         const senderName = user?.fullName || "DraftSendSign";
 
-        const emailPromises = createdRecipients.map((r) =>
+        // If signing order is enforced, only email the first signer (order=1)
+        // Subsequent signers get emailed automatically when the previous signer completes
+        const sortedRecipients = [...createdRecipients].sort((a, b) => a.signingOrder - b.signingOrder);
+        const recipientsToEmail = enforceOrder
+          ? sortedRecipients.slice(0, 1)  // only the first signer
+          : sortedRecipients;             // everyone at once
+
+        const emailPromises = recipientsToEmail.map((r) =>
           sendSigningRequestEmail({
             recipientName: r.name,
             recipientEmail: r.email,
@@ -185,7 +198,9 @@ export default function Step4Send({ file, recipients, fields, documentId, setDoc
 
         toast({
           title: "Document sent!",
-          description: `Signing request emailed to ${recipients.length} recipient(s)`,
+          description: enforceOrder
+            ? `Signing request sent to ${recipientsToEmail[0]?.name || "recipient 1"}. Others will be notified in order.`
+            : `Signing request emailed to ${recipients.length} recipient(s)`,
         });
       } else {
         toast({ title: "Draft saved" });
@@ -233,7 +248,9 @@ export default function Step4Send({ file, recipients, fields, documentId, setDoc
                 </div>
                 <div>
                   <Label>Expiry Date</Label>
-                  <Input type="date" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} data-testid="send-expiry" />
+                  <Input type="date" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} data-testid="send-expiry"
+                    min={new Date(Date.now() + 86400000).toISOString().split('T')[0]}
+                  />
                 </div>
               </div>
             </CardContent>

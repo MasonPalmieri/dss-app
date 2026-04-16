@@ -103,8 +103,30 @@ export default function DocumentDetailPage() {
   });
 
   const remindMutation = useMutation({
-    mutationFn: async () => { await apiRequest("POST", `/api/documents/${docId}/remind`); },
-    onSuccess: () => toast({ title: "Reminder sent to pending signers" }),
+    mutationFn: async () => {
+      const recipients = await apiRequest("GET", `/api/documents/${docId}/recipients`) as any[];
+      const pending = (recipients || []).filter((r: any) => r.status === "pending");
+      if (pending.length === 0) throw new Error("No pending recipients");
+      const senderName = doc?.senderName || "DraftSendSign";
+      await Promise.all(pending.map((r: any) =>
+        fetch("/api/send-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type: "signing_request",
+            recipientName: r.name,
+            recipientEmail: r.email,
+            senderName,
+            documentTitle: doc?.title || "Document",
+            subject: `Reminder: ${senderName} is waiting for your signature`,
+            message: "This is a friendly reminder that your signature is still needed.",
+            signingToken: r.signingToken,
+          }),
+        })
+      ));
+    },
+    onSuccess: () => toast({ title: "Reminder sent", description: "Pending recipients have been notified" }),
+    onError: (err: any) => toast({ title: "Reminder failed", description: err.message, variant: "destructive" }),
   });
 
   const voidMutation = useMutation({

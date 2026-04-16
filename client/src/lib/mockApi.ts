@@ -1,7 +1,7 @@
 // Real Supabase API — replaces in-memory mock
 // All function signatures kept identical to the old mockApi for zero UI changes.
 import { supabase } from "./supabase";
-import { sendCompletionEmail } from "./resend";
+import { sendCompletionEmail, sendSigningRequestEmail } from "./resend";
 
 // ─── Types (IDs for join tables are now bigint → number; userId is string UUID) ───
 
@@ -945,42 +945,98 @@ export const mockApi = {
         .eq("id", parseInt(fieldId));
     }
 
-    // Check if all recipients signed
+    // Log the signing event in audit trail
+    await supabase.from("audit_logs").insert({
+      document_id: recipient.document_id,
+      recipient_id: recipient.id,
+      action: "document_signed",
+      actor_name: recipient.name,
+      actor_email: recipient.email,
+      ip_address: ipAddress || "",
+      metadata: { signed_at: now },
+    }).then(() => {}).catch(() => {});
+
+    // Check if all recipients signed (re-fetch fresh data with full fields)
     const { data: allRecipients } = await supabase
       .from("recipients")
-      .select("status")
-      .eq("document_id", recipient.document_id);
+      .select("id, status, signing_order, name, email, signing_token")
+      .eq("document_id", recipient.document_id)
+      .order("signing_order", { ascending: true });
 
-    const allSigned = (allRecipients || []).every(r => r.status === "signed");
+    const allSigned = (allRecipients || []).every((r: any) => r.status === "signed");
+
+    if (!allSigned) {
+      // Find the next pending signer in order
+      const nextSigner = (allRecipients || []).find(r => r.status === "pending" && r.id !== recipient.id);
+      if (nextSigner) {
+        const { data: doc } = await supabase
+          .from("documents")
+          .select("title, sender_id")
+          .eq("id", recipient.document_id)
+          .single();
+        if (doc) {
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("full_name, email")
+            .eq("id", doc.sender_id)
+            .single();
+          if (profile) {
+            // Send directly via Resend API (absolute URL, most reliable)
+            sendSigningRequestEmail({
+              recipientName: nextSigner.name,
+              recipientEmail: nextSigner.email,
+              senderName: profile.full_name,
+              documentTitle: doc.title,
+              subject: `${profile.full_name} has sent you a document to sign: ${doc.title}`,
+              message: "The previous signer has completed their signature. It's your turn to review and sign.",
+              signingToken: nextSigner.signing_token,
+            }).catch((e) => console.error('Sequential email failed:', e));
+          }
+        }
+      }
+    }
+
     if (allSigned) {
       await supabase
         .from("documents")
         .update({ status: "completed", completed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
         .eq("id", recipient.document_id);
 
-      // Send completion email (non-blocking)
+      // Send completion emails to sender + all signers (non-blocking)
       supabase
         .from("documents")
         .select("title, sender_id")
         .eq("id", recipient.document_id)
         .single()
-        .then(({ data: doc }) => {
-          if (doc) {
-            supabase
-              .from("profiles")
-              .select("full_name, email")
-              .eq("id", doc.sender_id)
-              .single()
-              .then(({ data: profile }) => {
-                if (profile) {
-                  sendCompletionEmail({
-                    senderName: profile.full_name,
-                    senderEmail: profile.email,
-                    documentTitle: doc.title,
-                    recipientCount: (allRecipients || []).length,
-                  }).catch(() => {});
-                }
-              });
+        .then(async ({ data: doc }) => {
+          if (!doc) return;
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("full_name, email")
+            .eq("id", doc.sender_id)
+            .single();
+          if (!profile) return;
+
+          // Email the sender
+          sendCompletionEmail({
+            senderName: profile.full_name,
+            senderEmail: profile.email,
+            documentTitle: doc.title,
+            documentId: recipient.document_id,
+            recipientCount: (allRecipients || []).length,
+          }).catch(() => {});
+
+          // Also email every signer a copy
+          for (const r of (allRecipients || [])) {
+            if (r.email && r.email !== profile.email) {
+              sendCompletionEmail({
+                senderName: profile.full_name,
+                senderEmail: r.email,
+                documentTitle: doc.title,
+                documentId: recipient.document_id,
+                recipientCount: (allRecipients || []).length,
+              }).catch(() => {});
+            }
           }
         });
     }

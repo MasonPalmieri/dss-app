@@ -77,14 +77,39 @@ export default function DocumentsPage() {
 
   const reminderMutation = useMutation({
     mutationFn: async (docId: number) => {
-      // In production this would re-send emails via Resend. For now, log an audit event.
-      await apiRequest("POST", `/api/documents/${docId}/send`);
+      // Fetch doc + recipients, then send real reminder emails
+      const doc = await apiRequest("GET", `/api/documents/${docId}`) as any;
+      const recipients = await apiRequest("GET", `/api/documents/${docId}/recipients`) as any[];
+      const pendingRecipients = (recipients || []).filter((r: any) => r.status === "pending");
+
+      if (pendingRecipients.length === 0) {
+        throw new Error("No pending recipients to remind");
+      }
+
+      const senderName = user?.fullName || "DraftSendSign";
+      const emailPromises = pendingRecipients.map((r: any) =>
+        fetch("/api/send-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type: "signing_request",
+            recipientName: r.name,
+            recipientEmail: r.email,
+            senderName,
+            documentTitle: doc.title || doc.fileName,
+            subject: `Reminder: ${senderName} is waiting for your signature`,
+            message: "This is a friendly reminder that your signature is still needed on this document.",
+            signingToken: r.signingToken,
+          }),
+        })
+      );
+      await Promise.all(emailPromises);
     },
     onSuccess: () => {
-      toast({ title: "Reminder sent", description: "Recipients have been notified" });
+      toast({ title: "Reminder sent", description: "Pending recipients have been notified" });
     },
-    onError: () => {
-      toast({ title: "Reminder sent", description: "Recipients have been notified" });
+    onError: (err: any) => {
+      toast({ title: "Reminder failed", description: err.message || "Could not send reminder", variant: "destructive" });
     },
   });
 

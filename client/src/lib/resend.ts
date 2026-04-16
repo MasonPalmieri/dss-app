@@ -15,6 +15,7 @@ export interface CompletionEmailParams {
   senderName: string;
   senderEmail: string;
   documentTitle: string;
+  documentId: number;
   recipientCount: number;
 }
 

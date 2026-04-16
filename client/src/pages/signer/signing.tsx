@@ -447,47 +447,55 @@ export default function SigningPage() {
           <div className="relative w-full" style={{ aspectRatio: document?.pdfSignedUrl ? undefined : "8.5/11" }}>
             {document?.pdfSignedUrl ? (
               <div className="relative w-full">
-                {/* Render all pages stacked */}
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map(pageNum => (
-                  <div key={pageNum} className="relative w-full">
-                    {pageNum > 1 && (
-                      <div className="text-xs text-center text-muted-foreground py-2 bg-gray-100 border-y">
-                        Page {pageNum} of {totalPages}
-                      </div>
-                    )}
-                    <PdfPageViewer
-                      signedUrl={document.pdfSignedUrl}
-                      pageNum={pageNum}
-                      onPageCount={pageNum === 1 ? setTotalPages : undefined}
-                    />
-                  </div>
-                ))}
-                {fields.map((f: any, idx: number) => {
-                  const isFilled = !!fieldValues[f.id];
-                  const isCurrent = idx === currentFieldIndex;
+                {/* Render each page with its fields overlaid inside — fields are scoped per page */}
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map(pageNum => {
+                  const pageFields = fields.filter((f: any) => (f.page || 1) === pageNum);
                   return (
-                    <div
-                      key={f.id}
-                      ref={el => { fieldRefs.current[f.id] = el; }}
-                      className={`absolute border-2 rounded cursor-pointer flex items-center justify-center transition-all ${
-                        isCurrent && !isFilled ? "border-[#c8210d] bg-[#c8210d]/10 ring-2 ring-[#c8210d]/30 animate-pulse" :
-                        isFilled ? "border-green-500 bg-green-500/10" :
-                        "border-amber-400 bg-amber-50/80 hover:border-amber-500"
-                      }`}
-                      style={{ left: `${f.x}%`, top: `${f.y}%`, width: `${f.width || 24}%`, height: `${f.height || 6}%` }}
-                      onClick={() => handleFieldClick(f, idx)}
-                    >
-                      {isFilled ? (
-                        <span className="text-xs font-medium text-green-700 truncate px-2">
-                          {fieldValues[f.id]?.startsWith("typed:") ? fieldValues[f.id].replace("typed:", "") :
-                           fieldValues[f.id]?.startsWith("data:") ? "✓ Signed" : fieldValues[f.id]}
-                        </span>
-                      ) : (
-                        <span className="text-[11px] font-medium text-amber-700 flex items-center gap-1">
-                          {f.type === "signature" ? <PenTool className="h-3 w-3" /> : null}
-                          {f.label || f.type}
-                        </span>
+                    <div key={pageNum} className="relative w-full">
+                      {pageNum > 1 && (
+                        <div className="text-xs text-center text-muted-foreground py-2 bg-gray-100 border-y">
+                          Page {pageNum} of {totalPages}
+                        </div>
                       )}
+                      {/* Page image */}
+                      <div className="relative w-full">
+                        <PdfPageViewer
+                          signedUrl={document.pdfSignedUrl}
+                          pageNum={pageNum}
+                          onPageCount={pageNum === 1 ? setTotalPages : undefined}
+                        />
+                        {/* Fields overlaid on THIS page only, coordinates relative to this page */}
+                        {pageFields.map((f: any) => {
+                          const idx = fields.indexOf(f);
+                          const isFilled = !!fieldValues[f.id];
+                          const isCurrent = idx === currentFieldIndex;
+                          return (
+                            <div
+                              key={f.id}
+                              ref={el => { fieldRefs.current[f.id] = el; }}
+                              className={`absolute border-2 rounded cursor-pointer flex items-center justify-center transition-all ${
+                                isCurrent && !isFilled ? "border-[#c8210d] bg-[#c8210d]/10 ring-2 ring-[#c8210d]/30 animate-pulse" :
+                                isFilled ? "border-green-500 bg-green-500/10" :
+                                "border-amber-400 bg-amber-50/80 hover:border-amber-500"
+                              }`}
+                              style={{ left: `${f.x}%`, top: `${f.y}%`, width: `${f.width || 24}%`, height: `${f.height || 6}%` }}
+                              onClick={() => handleFieldClick(f, idx)}
+                            >
+                              {isFilled ? (
+                                <span className="text-xs font-medium text-green-700 truncate px-2">
+                                  {fieldValues[f.id]?.startsWith("typed:") ? fieldValues[f.id].replace("typed:", "") :
+                                   fieldValues[f.id]?.startsWith("data:") ? "✓ Signed" : fieldValues[f.id]}
+                                </span>
+                              ) : (
+                                <span className="text-[11px] font-medium text-amber-700 flex items-center gap-1">
+                                  {f.type === "signature" ? <PenTool className="h-3 w-3" /> : null}
+                                  {f.label || f.type}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   );
                 })}

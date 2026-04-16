@@ -9,8 +9,10 @@ Sentry.init({
   enabled: import.meta.env.PROD, // Only track errors in production, not local dev
   tracesSampleRate: 0.2, // 20% of transactions for performance monitoring
   beforeSend(event) {
-    // Don't send errors from the gate password screen
-    if (event.exception?.values?.[0]?.value?.includes('DSS')) return null;
+    const msg = event.exception?.values?.[0]?.value || '';
+    // Suppress Supabase internal auth lock errors (multi-tab conflict, harmless)
+    if (msg.includes('Lock') && msg.includes('sb-') && msg.includes('auth-token')) return null;
+    if (msg.includes('Lock broken by another request')) return null;
     return event;
   },
 });

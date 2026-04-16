@@ -6,6 +6,11 @@ const SUPABASE_SERVICE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzd
 
 // Map price IDs to plan names
 const PRICE_TO_PLAN = {
+  // New pricing
+  'price_1TMtDSH8ezWvGnQeDLXo4ke7': 'individual',
+  'price_1TMtEvH8ezWvGnQeUniT3ao4': 'individual',
+  'price_1TMtG3H8ezWvGnQeByyiFF4M': 'business',
+  // Legacy pricing (existing subscribers)
   'price_1TH3KEH8ezWvGnQel6obXhik': 'pro',
   'price_1TH3KEH8ezWvGnQeAk1AeCyO': 'pro',
   'price_1TH3KdH8ezWvGnQepK5yj2nx': 'team',

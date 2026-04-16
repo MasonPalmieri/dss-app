@@ -93,8 +93,9 @@ function AppRouter() {
   const { isAuthenticated, isLoading } = useAuth();
   const [location] = useLocation();
 
-  // Wait for Supabase session check — prevents flash of login screen
-  if (isLoading) {
+  // Skip auth loading spinner for public paths (signing links, marketing pages)
+  // These routes should render immediately without waiting for session check
+  if (isLoading && !isPublicPath(location)) {
     return (
       <div className="min-h-screen bg-[#0d1117] flex items-center justify-center">
         <div className="h-6 w-6 border-2 border-[#c8210d] border-t-transparent rounded-full animate-spin" />

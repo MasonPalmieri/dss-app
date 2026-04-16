@@ -45,6 +45,7 @@ export default function NewDocumentWizard() {
   const [recipients, setRecipients] = useState<WizardRecipient[]>([]);
   const [fields, setFields] = useState<PlacedField[]>([]);
   const [documentId, setDocumentId] = useState<number | null>(null);
+  const [enforceOrder, setEnforceOrder] = useState(false);
   const [, navigate] = useLocation();
 
   const addRecipient = () => {
@@ -108,6 +109,8 @@ export default function NewDocumentWizard() {
           addRecipientFromContact={addRecipientFromContact}
           removeRecipient={removeRecipient}
           updateRecipient={updateRecipient}
+          enforceOrder={enforceOrder}
+          setEnforceOrder={setEnforceOrder}
           onNext={() => setStep(2)}
           onBack={() => setStep(0)}
         />
@@ -129,6 +132,7 @@ export default function NewDocumentWizard() {
           fields={fields}
           documentId={documentId}
           setDocumentId={setDocumentId}
+          enforceOrder={enforceOrder}
           onBack={() => setStep(2)}
           onDone={() => navigate("/documents")}
         />

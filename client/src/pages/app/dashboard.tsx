@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
+import { mockApi } from "@/lib/mockApi";
 import { useAuth } from "@/contexts/auth-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -73,22 +74,28 @@ export default function DashboardPage() {
   const [dismissedOnboarding, setDismissedOnboarding] = useState(false);
 
   const { data: stats, isLoading: statsLoading, isError: statsError } = useQuery<any>({
-    queryKey: ["/api/stats", "userId", userId],
+    queryKey: ["/api/stats", userId],
+    queryFn: () => mockApi.getStats(userId),
+    enabled: !!userId && userId !== "1",
   });
 
   const { data: documents, isLoading: docsLoading } = useQuery<any[]>({
-    queryKey: ["/api/documents", "userId", userId],
+    queryKey: ["/api/documents", userId],
+    queryFn: () => mockApi.getDocuments(userId),
+    enabled: !!userId && userId !== "1",
   });
 
   const { data: auditLogs } = useQuery<any[]>({
-    queryKey: ["/api/audit-logs", "userId", userId],
+    queryKey: ["/api/audit-logs", userId],
+    queryFn: () => mockApi.getAuditLogsByUser(userId),
+    enabled: !!userId && userId !== "1",
   });
 
   const statCards = [
-    { label: "Sent This Month", value: stats?.sentThisMonth ?? 0, icon: Send, color: "text-blue-600" },
-    { label: "Pending Signatures", value: stats?.pendingSignatures ?? 0, icon: Clock, color: "text-orange-500" },
-    { label: "Completed", value: stats?.completedDocs ?? 0, icon: CheckCircle2, color: "text-green-600" },
-    { label: "Drafts", value: stats?.drafts ?? 0, icon: FileEdit, color: "text-gray-500" },
+    { label: "Sent This Month", value: stats?.total ?? 0, icon: Send, color: "text-blue-600" },
+    { label: "Pending Signatures", value: stats?.pending ?? 0, icon: Clock, color: "text-orange-500" },
+    { label: "Completed", value: stats?.completed ?? 0, icon: CheckCircle2, color: "text-green-600" },
+    { label: "Drafts", value: stats?.draft ?? 0, icon: FileEdit, color: "text-gray-500" },
   ];
 
   const recentDocs = (documents || []).slice(0, 5);
