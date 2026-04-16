@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Upload, FileText, X, Zap } from "lucide-react";
@@ -18,67 +18,59 @@ interface Props {
 }
 
 export default function Step1Upload({ file, setFile, onNext }: Props) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [fileError, setFileError] = useState<string | null>(null);
+
   useEffect(() => {
-    const stored = sessionStorage.getItem('ai-generated-doc');
+    const stored = sessionStorage.getItem("ai-generated-doc");
     if (stored) {
       try {
         const { name, content, pages } = JSON.parse(stored);
-        sessionStorage.removeItem('ai-generated-doc');
-        // Create a text blob representing the document
-        const blob = new Blob([content], { type: 'text/plain' });
-        const fileObj = new File([blob], name || 'AI-Generated-Agreement.pdf', { type: 'application/pdf' });
+        sessionStorage.removeItem("ai-generated-doc");
+        const blob = new Blob([content], { type: "text/plain" });
+        const fileObj = new File([blob], name || "AI-Generated-Agreement.pdf", {
+          type: "application/pdf",
+        });
         setFile({
-          name: name || 'AI-Generated-Agreement.pdf',
+          name: name || "AI-Generated-Agreement.pdf",
           size: `${(blob.size / 1024).toFixed(1)} KB`,
           pages: pages || 1,
           fileObject: fileObj,
         });
-        // Auto-advance to step 2 after a brief moment
         setTimeout(() => onNext(), 300);
       } catch {}
     }
   }, []);
 
-  const [fileError, setFileError] = useState<string | null>(null);
-
-  const processFile = useCallback(async (f: File) => {
-    setFileError(null);
-
-    // Only accept PDF files
-    const isPdf = f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf');
-    if (!isPdf) {
-      const ext = f.name.split('.').pop()?.toUpperCase() || 'this format';
-      setFileError(`${ext} files are not supported. Please upload a PDF. If you have a Word document, export it as PDF first (File → Save As → PDF).`);
-      return;
-    }
-
-    let pages = 1;
-    try {
-      const pdfjsLib = await import('pdfjs-dist');
-      const workerUrl = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).href;
-      pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
-      const buf = await f.arrayBuffer();
-      const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
-      pages = pdf.numPages;
-    } catch (err) {
-      console.error('PDF page count error:', err);
-    }
-    setFile({ name: f.name, size: `${(f.size / 1024).toFixed(1)} KB`, pages, fileObject: f });
-  }, [setFile]);
-
   const processFile = useCallback(
     async (f: File) => {
-      let pages = Math.max(1, Math.ceil(f.size / 50000));
+      setFileError(null);
+
+      const isPdf =
+        f.type === "application/pdf" || f.name.toLowerCase().endsWith(".pdf");
+      if (!isPdf) {
+        const ext = f.name.split(".").pop()?.toUpperCase() || "this format";
+        setFileError(
+          `${ext} files are not supported. Please upload a PDF. If you have a Word document, export it as PDF first (File → Save As → PDF).`
+        );
+        return;
+      }
+
+      let pages = 1;
       try {
         const pdfjsLib = await import("pdfjs-dist");
-        pdfjsLib.GlobalWorkerOptions.workerSrc =
-          `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+        const workerUrl = new URL(
+          "pdfjs-dist/build/pdf.worker.min.mjs",
+          import.meta.url
+        ).href;
+        pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
         const buf = await f.arrayBuffer();
         const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
         pages = pdf.numPages;
-      } catch {
-        // fall back to estimated page count
+      } catch (err) {
+        console.error("PDF page count error:", err);
       }
+
       setFile({
         name: f.name,
         size: `${(f.size / 1024).toFixed(1)} KB`,
@@ -127,39 +119,32 @@ export default function Step1Upload({ file, setFile, onNext }: Props) {
                 data-testid="upload-dropzone"
               >
                 <Upload className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
-                <h3 className="text-base font-semibold mb-1">Upload your document</h3>
-                <p className="text-sm text-muted-foreground mb-4">Drag & drop a PDF, or click to browse</p>
-                <Button variant="outline" size="sm">Browse Files</Button>
-                <input id="file-input" type="file" accept=".pdf" className="hidden" onChange={handleFileInput} />
-              </div>
-
-              {/* File type error */}
-              {fileError && (
-                <div className="flex items-start gap-3 p-4 rounded-lg border border-destructive/40 bg-destructive/5 text-sm text-destructive">
-                  <span className="shrink-0 mt-0.5">⚠️</span>
-                  <span>{fileError}</span>
-                </div>
-              )}
-
-              {/* Demo shortcut */}
-              <div>
-                <p className="text-xs text-muted-foreground text-center mb-3 flex items-center gap-2 justify-center">
-                  <Zap className="h-3 w-3 text-[#c8210d]" />
-                  Or use a demo document to try the workflow
+                <h3 className="text-base font-semibold mb-1">
+                  Upload your document
+                </h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Drag &amp; drop a PDF, or click to browse
                 </p>
-                <Button variant="outline" size="sm" type="button">
+                <span className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors">
                   Browse Files
-                </Button>
+                </span>
               </button>
 
               <input
                 ref={inputRef}
                 id="file-input"
                 type="file"
-                accept=".pdf,.doc,.docx"
+                accept=".pdf"
                 className="hidden"
                 onChange={handleFileInput}
               />
+
+              {fileError && (
+                <div className="flex items-start gap-3 p-4 rounded-lg border border-destructive/40 bg-destructive/5 text-sm text-destructive">
+                  <span className="shrink-0 mt-0.5">⚠️</span>
+                  <span>{fileError}</span>
+                </div>
+              )}
 
               {showDemoDocs && (
                 <div>
