@@ -66,16 +66,51 @@ export default function Step1Upload({ file, setFile, onNext }: Props) {
     setFile({ name: f.name, size: `${(f.size / 1024).toFixed(1)} KB`, pages, fileObject: f });
   }, [setFile]);
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    const f = e.dataTransfer.files[0];
-    if (f) processFile(f);
-  }, [processFile]);
+  const processFile = useCallback(
+    async (f: File) => {
+      let pages = Math.max(1, Math.ceil(f.size / 50000));
+      try {
+        const pdfjsLib = await import("pdfjs-dist");
+        pdfjsLib.GlobalWorkerOptions.workerSrc =
+          `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+        const buf = await f.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+        pages = pdf.numPages;
+      } catch {
+        // fall back to estimated page count
+      }
+      setFile({
+        name: f.name,
+        size: `${(f.size / 1024).toFixed(1)} KB`,
+        pages,
+        fileObject: f,
+      });
+    },
+    [setFile]
+  );
 
-  const handleFileInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0];
-    if (f) processFile(f);
-  }, [processFile]);
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      const f = e.dataTransfer.files?.[0];
+      if (f) processFile(f);
+    },
+    [processFile]
+  );
+
+  const handleFileInput = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const f = e.target.files?.[0];
+      if (f) processFile(f);
+    },
+    [processFile]
+  );
+
+  const openPicker = () => {
+    inputRef.current?.click();
+  };
+
+  const showDemoDocs = process.env.NODE_ENV !== "production";
 
   return (
     <div className="space-y-6">
@@ -83,11 +118,12 @@ export default function Step1Upload({ file, setFile, onNext }: Props) {
         <CardContent className="p-8">
           {!file ? (
             <div className="space-y-6">
-              <div
-                className="border-2 border-dashed rounded-xl p-12 text-center cursor-pointer hover:border-[#c8210d]/50 hover:bg-[#c8210d]/5 transition-colors"
+              <button
+                type="button"
+                className="w-full border-2 border-dashed rounded-xl p-12 text-center hover:border-[#c8210d]/50 hover:bg-[#c8210d]/5 transition-colors cursor-pointer"
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={handleDrop}
-                onClick={() => document.getElementById("file-input")?.click()}
+                onClick={openPicker}
                 data-testid="upload-dropzone"
               >
                 <Upload className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
@@ -111,25 +147,51 @@ export default function Step1Upload({ file, setFile, onNext }: Props) {
                   <Zap className="h-3 w-3 text-[#c8210d]" />
                   Or use a demo document to try the workflow
                 </p>
-                <div className="grid grid-cols-2 gap-2">
-                  {DEMO_DOCS.map(doc => (
-                    <button
-                      key={doc.name}
-                      className="flex items-center gap-3 p-3 border rounded-lg hover:border-[#c8210d]/40 hover:bg-[#c8210d]/5 transition-colors text-left group"
-                      onClick={() => setFile(doc)}
-                      data-testid={`demo-doc-${doc.name}`}
-                    >
-                      <div className="flex h-8 w-8 items-center justify-center rounded bg-[#c8210d]/10 text-[#c8210d] shrink-0">
-                        <FileText className="h-4 w-4" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-xs font-medium truncate group-hover:text-[#c8210d] transition-colors">{doc.name}</p>
-                        <p className="text-[10px] text-muted-foreground">{doc.size} · {doc.pages} pages</p>
-                      </div>
-                    </button>
-                  ))}
+                <Button variant="outline" size="sm" type="button">
+                  Browse Files
+                </Button>
+              </button>
+
+              <input
+                ref={inputRef}
+                id="file-input"
+                type="file"
+                accept=".pdf,.doc,.docx"
+                className="hidden"
+                onChange={handleFileInput}
+              />
+
+              {showDemoDocs && (
+                <div>
+                  <p className="text-xs text-muted-foreground text-center mb-3 flex items-center gap-2 justify-center">
+                    <Zap className="h-3 w-3 text-[#c8210d]" />
+                    Or use a demo document to try the workflow (demo only)
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {DEMO_DOCS.map((doc) => (
+                      <button
+                        key={doc.name}
+                        type="button"
+                        className="flex items-center gap-3 p-3 border rounded-lg hover:border-[#c8210d]/40 hover:bg-[#c8210d]/5 transition-colors text-left group"
+                        onClick={() => setFile(doc as WizardFile)}
+                        data-testid={`demo-doc-${doc.name}`}
+                      >
+                        <div className="flex h-8 w-8 items-center justify-center rounded bg-[#c8210d]/10 text-[#c8210d] shrink-0">
+                          <FileText className="h-4 w-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs font-medium truncate group-hover:text-[#c8210d] transition-colors">
+                            {doc.name}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground">
+                            {doc.size} · {doc.pages} pages
+                          </p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           ) : (
             <div className="flex items-center gap-4 p-4 bg-muted/50 rounded-lg">
@@ -138,9 +200,17 @@ export default function Step1Upload({ file, setFile, onNext }: Props) {
               </div>
               <div className="flex-1">
                 <p className="font-medium">{file.name}</p>
-                <p className="text-sm text-muted-foreground">{file.size} · {file.pages} page{file.pages > 1 ? "s" : ""}</p>
+                <p className="text-sm text-muted-foreground">
+                  {file.size} · {file.pages} page{file.pages > 1 ? "s" : ""}
+                </p>
               </div>
-              <Button variant="ghost" size="icon" onClick={() => setFile(null)} data-testid="remove-file">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setFile(null)}
+                data-testid="remove-file"
+                type="button"
+              >
                 <X className="h-4 w-4" />
               </Button>
             </div>
