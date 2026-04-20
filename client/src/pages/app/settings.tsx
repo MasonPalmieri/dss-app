@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useAuth } from "@/contexts/auth-context";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -51,26 +52,52 @@ export default function Settings() {
   const handleSaveProfile = async () => {
     setSaving(true);
     try {
-      await apiRequest("PATCH", `/api/users/${user?.id || 1}`, {
-        fullName: profile.fullName,
-        email: profile.email,
-        company: profile.company,
-      });
-      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      // Update profile row in Supabase
+      const { error } = await supabase
+        .from("profiles")
+        .update({
+          full_name: profile.fullName,
+          company: profile.company,
+          phone: profile.phone,
+          timezone: profile.timezone,
+        })
+        .eq("id", user?.id);
+      if (error) throw error;
+      // If email changed, update auth email too
+      if (profile.email !== user?.email) {
+        await supabase.auth.updateUser({ email: profile.email });
+      }
       toast({ title: "Profile saved", description: "Your profile has been updated" });
-    } catch {
-      toast({ title: "Profile saved", description: "Your profile has been updated" });
+    } catch (err: any) {
+      toast({ title: "Error saving profile", description: err?.message || "Please try again", variant: "destructive" });
     } finally {
       setSaving(false);
     }
   };
 
-  const handleChangePassword = () => {
+  const [pwSaving, setPwSaving] = useState(false);
+  const handleChangePassword = async () => {
     if (!pwForm.current) { toast({ title: "Error", description: "Enter your current password", variant: "destructive" }); return; }
-    if (pwForm.next.length < 6) { toast({ title: "Error", description: "New password must be at least 6 characters", variant: "destructive" }); return; }
+    if (pwForm.next.length < 8) { toast({ title: "Error", description: "New password must be at least 8 characters", variant: "destructive" }); return; }
     if (pwForm.next !== pwForm.confirm) { toast({ title: "Error", description: "Passwords do not match", variant: "destructive" }); return; }
-    toast({ title: "Password updated", description: "Your password has been changed successfully" });
-    setPwForm({ current: "", next: "", confirm: "" });
+    setPwSaving(true);
+    try {
+      // Re-authenticate with current password first
+      const { error: signInErr } = await supabase.auth.signInWithPassword({
+        email: user?.email || "",
+        password: pwForm.current,
+      });
+      if (signInErr) throw new Error("Current password is incorrect");
+      // Now update to new password
+      const { error } = await supabase.auth.updateUser({ password: pwForm.next });
+      if (error) throw error;
+      toast({ title: "Password updated", description: "Your password has been changed successfully" });
+      setPwForm({ current: "", next: "", confirm: "" });
+    } catch (err: any) {
+      toast({ title: "Error", description: err?.message || "Failed to update password", variant: "destructive" });
+    } finally {
+      setPwSaving(false);
+    }
   };
 
   const handleSave = (section: string) => {
@@ -151,7 +178,7 @@ export default function Settings() {
                   <div><Label className="text-xs">New Password</Label><Input type="password" value={pwForm.next} onChange={(e) => setPwForm({ ...pwForm, next: e.target.value })} /></div>
                   <div><Label className="text-xs">Confirm Password</Label><Input type="password" value={pwForm.confirm} onChange={(e) => setPwForm({ ...pwForm, confirm: e.target.value })} /></div>
                 </div>
-                <Button variant="outline" size="sm" className="mt-3" onClick={handleChangePassword}>Update Password</Button>
+                <Button variant="outline" size="sm" className="mt-3" onClick={handleChangePassword} disabled={pwSaving}>{pwSaving ? "Updating…" : "Update Password"}</Button>
               </div>
               <Separator />
               <div className="flex items-center justify-between">

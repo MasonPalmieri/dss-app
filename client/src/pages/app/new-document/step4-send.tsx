@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { ArrowLeft, Send, Save, Loader2, FileText, Upload } from "lucide-react";
+import { ArrowLeft, Send, Save, Loader2, FileText, Upload, MailWarning } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { WizardFile, WizardRecipient, PlacedField } from "./index";
 
@@ -84,9 +84,36 @@ export default function Step4Send({ file, recipients, fields, documentId, setDoc
         }
       }
 
-      // Step 1 — Upload PDF to Supabase Storage (with 30s timeout)
+      // Step 1 — Check storage quota, then upload PDF to Supabase Storage (with 30s timeout)
       let filePath: string | null = null;
       if (file?.fileObject && user?.id) {
+        // Enforce storage quota by plan
+        const STORAGE_LIMITS_MB: Record<string, number> = {
+          starter: 1024,       // 1 GB
+          individual: 10240,   // 10 GB
+          pro: 10240,
+          business: 102400,    // 100 GB
+          enterprise: 1048576, // 1 TB
+        };
+        const planKey = user?.plan || "starter";
+        const limitMb = STORAGE_LIMITS_MB[planKey] ?? 1024;
+        try {
+          const { data: storageFiles } = await supabase.storage
+            .from("documents")
+            .list(user.id, { limit: 500 });
+          const usedBytes = (storageFiles || []).reduce((acc: number, f: any) => acc + (f.metadata?.size || 0), 0);
+          const usedMb = usedBytes / (1024 * 1024);
+          const newFileMb = (file.fileObject.size || 0) / (1024 * 1024);
+          if (usedMb + newFileMb > limitMb) {
+            toast({
+              title: "Storage limit reached",
+              description: `Your ${planKey} plan includes ${limitMb >= 1024 ? (limitMb / 1024) + "GB" : limitMb + "MB"} of storage. You've used ${usedMb.toFixed(1)}MB. Upgrade your plan or delete old documents to free up space.`,
+              variant: "destructive",
+            });
+            setSending(false);
+            return;
+          }
+        } catch { /* non-blocking — continue if quota check fails */ }
         setUploadProgress("Uploading document...");
         try {
           const safeName = file.name.replace(/\s+/g, "_").replace(/[^a-zA-Z0-9._-]/g, "");
@@ -300,6 +327,14 @@ export default function Step4Send({ file, recipients, fields, documentId, setDoc
             </div>
           </CardContent>
         </Card>
+      </div>
+
+      {/* Spam warning */}
+      <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-900/40 dark:bg-amber-950/20 p-3 text-sm">
+        <MailWarning className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+        <p className="text-amber-800 dark:text-amber-300 leading-snug">
+          <strong>Heads up:</strong> Signing request emails may land in your recipients' spam or junk folder. Let them know to check there if they don't see it within a few minutes — and ask them to mark it as <strong>Not Spam</strong> so future emails go straight to their inbox.
+        </p>
       </div>
 
       <div className="flex justify-between">

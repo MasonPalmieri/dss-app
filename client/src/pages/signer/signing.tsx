@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -106,6 +107,21 @@ export default function SigningPage() {
   const document = signingData?.document;
   const recipient = signingData?.recipient;
   const allFields = signingData?.fields || [];
+
+  // Fetch sender's branding (logo URL) if available
+  const { data: senderProfile } = useQuery({
+    queryKey: ["sender-profile", document?.sender_id],
+    enabled: !!document?.sender_id,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("profiles")
+        .select("full_name, company, logo_url")
+        .eq("id", document.sender_id)
+        .single();
+      return data;
+    },
+    staleTime: 1000 * 60 * 10,
+  });
   const fields = allFields.filter((f: any) => !f.recipientId || f.recipientId === recipient?.id);
   const currentField = fields[currentFieldIndex];
 
@@ -343,9 +359,18 @@ export default function SigningPage() {
         <div className="max-w-4xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
           {/* Logo + title — hide title on mobile */}
           <div className="flex items-center gap-3 min-w-0">
-            <div className="flex h-7 w-7 items-center justify-center rounded bg-[#c8210d] text-white shrink-0">
-              <PenTool className="h-3.5 w-3.5" />
-            </div>
+            {senderProfile?.logo_url ? (
+              <img
+                src={senderProfile.logo_url}
+                alt={senderProfile.company || "Sender logo"}
+                className="h-7 w-auto max-w-[120px] object-contain rounded shrink-0"
+                onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+              />
+            ) : (
+              <div className="flex h-7 w-7 items-center justify-center rounded bg-[#c8210d] text-white shrink-0">
+                <PenTool className="h-3.5 w-3.5" />
+              </div>
+            )}
             <span className="hidden sm:block font-semibold text-sm truncate">{document?.title || "Document"}</span>
           </div>
 

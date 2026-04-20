@@ -21,11 +21,13 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Plus, MoreHorizontal, Trash2, Users, Shield, UserPlus, Building2, Crown, Lock } from "lucide-react";
+import { Plus, MoreHorizontal, Trash2, Users, Shield, UserPlus, Building2, Crown, Lock, AlertCircle } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Teams() {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [showInvite, setShowInvite] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState("member");
@@ -41,12 +43,29 @@ export default function Teams() {
         email: inviteEmail,
         role: inviteRole,
       });
+      // Send invite email via Resend
+      await fetch("/api/send-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "team_invite",
+          recipientEmail: inviteEmail,
+          senderName: user?.fullName || "Your team admin",
+          senderEmail: user?.email || "",
+          role: inviteRole,
+          appUrl: window.location.origin,
+        }),
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/team"] });
+      toast({ title: "Invite sent", description: `An invitation email has been sent to ${inviteEmail}. Ask them to check their spam folder if they don\'t see it within a few minutes.` });
       setShowInvite(false);
       setInviteEmail("");
       setInviteRole("member");
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to send invite. Please try again.", variant: "destructive" });
     },
   });
 

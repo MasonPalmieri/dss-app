@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Upload, FileText, X, Zap } from "lucide-react";
+import { Upload, FileText, X, Zap, LayoutTemplate } from "lucide-react";
 import type { WizardFile } from "./index";
 
 const DEMO_DOCS = [
@@ -20,8 +20,21 @@ interface Props {
 export default function Step1Upload({ file, setFile, onNext }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [fileError, setFileError] = useState<string | null>(null);
+  const [templateHint, setTemplateHint] = useState<string | null>(null);
 
   useEffect(() => {
+    // Check if coming from a template
+    const tmpl = sessionStorage.getItem("dss_template");
+    if (tmpl) {
+      try {
+        const { name } = JSON.parse(tmpl);
+        sessionStorage.removeItem("dss_template");
+        // Pre-set the file name from the template so the user can upload the matching PDF
+        // We show a prompt banner — the actual upload still required
+        setTemplateHint(name);
+      } catch {}
+    }
+
     const stored = sessionStorage.getItem("ai-generated-doc");
     if (stored) {
       try {
@@ -108,6 +121,17 @@ export default function Step1Upload({ file, setFile, onNext }: Props) {
     <div className="space-y-6">
       <Card>
         <CardContent className="p-8">
+          {templateHint && (
+            <div className="flex items-center gap-3 mb-5 rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-900/40 dark:bg-blue-950/20 px-4 py-3 text-sm">
+              <LayoutTemplate className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0" />
+              <p className="text-blue-800 dark:text-blue-300">
+                Template selected: <strong>{templateHint}</strong>. Upload the corresponding PDF to continue.
+              </p>
+              <button onClick={() => setTemplateHint(null)} className="ml-auto text-blue-400 hover:text-blue-600">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
           {!file ? (
             <div className="space-y-6">
               <button
